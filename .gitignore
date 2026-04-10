@@ -1,0 +1,13 @@
+# Runtime files
+.last_reminded
+completed_log.json
+reminders.json
+todo_cron.log
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Claude
+.claude/
