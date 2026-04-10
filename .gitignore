@@ -3,6 +3,7 @@
 completed_log.json
 reminders.json
 todo_cron.log
+todos.json
 
 # Python
 .venv/
