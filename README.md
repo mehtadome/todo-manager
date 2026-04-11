@@ -42,61 +42,27 @@ git clone https://github.com/mehtadome/todo-manager.git
 cd todo-manager
 ```
 
-### 2. Create the virtual environment and install dependencies
+### 2. Run setup
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install claude-agent-sdk anyio
+bash setup.sh
 ```
 
-### 3. Make the shell scripts executable
+This handles everything in one shot:
+- Creates the Python virtual environment and installs dependencies
+- Makes the shell scripts executable
+- Initializes the data files (`todos.json`, `reminders.json`, etc.)
+- Registers the macOS LaunchAgent that opens a Terminal window at login
 
-```bash
-chmod +x todo_remind.sh todo_checkin.sh
-```
-
-### 4. Register the login launcher
-
-This creates a macOS LaunchAgent that opens a Terminal window with your todos every time you log in.
-
-Run this once, replacing the path if you cloned the repo somewhere other than `~/Desktop/VSCode/Claude Sandbox/todo-manager`:
-
-```bash
-SCRIPT_DIR="$(cd "$(pwd)" && pwd)"
-
-cat > ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.$(whoami).todo-manager</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$SCRIPT_DIR/todo_remind.sh</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>
-EOF
-
-launchctl load ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist
-```
-
-To verify it's registered:
+To verify the launcher is registered:
 
 ```bash
 launchctl list | grep todo-manager
 ```
 
-> **If you move the folder**, unload the agent, delete the plist, and re-run the block above from the new location:
-> ```bash
-> launchctl unload ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist
-> rm ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist
-> ```
+> **If you move the folder**, just re-run `bash setup.sh` from the new location. It will re-register the LaunchAgent with the updated path.
 
-### 5. Grant macOS permissions
+### 3. Grant macOS permissions
 
 The launcher uses AppleScript to open a Terminal window. On first run, macOS will prompt you to allow this. Click **Allow** when asked.
 
@@ -262,10 +228,12 @@ Output:
 
 | File | Purpose |
 |------|---------|
+| `setup.sh` | One-time setup: venv, dependencies, data files, LaunchAgent |
 | `todo_manager.py` | Main CLI script |
 | `todo_remind.sh` | Opens a Terminal window at login with your todo summary |
 | `todo_checkin.sh` | Opens a Terminal window for an interactive check-in session |
-| `.venv/` | Python virtual environment (created during setup) |
-| `todos.json` | Live task list (auto-created on first use) |
-| `reminders.json` | Active reminders (auto-created on first use) |
-| `completed_log.json` | Completion history (auto-created on first use) |
+| `.venv/` | Python virtual environment (created by setup) |
+| `todos.json` | Live task list (created by setup) |
+| `reminders.json` | Active reminders (created by setup) |
+| `completed_log.json` | Completion history (created by setup) |
+| `.last_run` | Tracks the last date the login reminder fired (created by setup) |
