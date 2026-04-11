@@ -1,55 +1,152 @@
 # Todo Manager
 
-An AI-powered local task manager. Rant about what you need to do — Claude turns it into clean, numbered tasks, recommends what to tackle first based on how long things have been sitting, and nudges you twice a day to stay on top of it.
+An AI-powered local task manager for macOS. Describe what you need to do in plain English — Claude turns it into clean, numbered tasks and recommends what to tackle first based on urgency and how long things have been sitting. A Terminal window opens automatically every time you log in.
+
+> **No API key needed.** This runs through your Claude Pro or Claude Code subscription.
 
 ---
 
-## Setup
+## Prerequisites
 
-> **No API key needed.** This app runs through your Claude Code subscription.
-> Make sure you're logged in: `claude login`
+Before cloning, make sure you have the following installed and ready.
 
-### 1. Create the virtual environment and install dependencies
+### Claude Code CLI
 
-From inside the `todo-manager/` folder:
+This app uses the `claude-agent-sdk`, which requires the Claude Code CLI to be installed and logged in.
+
+1. Install Claude Code: https://claude.ai/code
+2. Log in:
+   ```bash
+   claude login
+   ```
+   Follow the browser prompt to authenticate with your Anthropic account.
+
+### Python 3
+
+macOS ships with Python 3. Verify it's available:
+
+```bash
+python3 --version
+```
+
+If not found, install it from https://python.org or via Homebrew: `brew install python3`
+
+---
+
+## Installation
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/mehtadome/todo-manager.git
+cd todo-manager
+```
+
+### 2. Create the virtual environment and install dependencies
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install claude-agent-sdk anyio
 ```
 
-### 2. Enable the daily reminders (cron)
-
-Run this once from inside the `todo-manager/` folder to register the two cron jobs:
+### 3. Make the shell scripts executable
 
 ```bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PYTHON="$SCRIPT_DIR/.venv/bin/python3"
-(
-  echo "# Todo Manager — 1pm daily reminder"
-  echo "0 13 * * * source ~/.zshrc && \"$PYTHON\" \"$SCRIPT_DIR/todo_manager.py\" remind >> \"$SCRIPT_DIR/todo_cron.log\" 2>&1"
-  echo "# Todo Manager — 6pm interactive check-in"
-  echo "0 18 * * * source ~/.zshrc && \"$SCRIPT_DIR/todo_checkin.sh\" >> \"$SCRIPT_DIR/todo_cron.log\" 2>&1"
-) | crontab -
+chmod +x todo_remind.sh todo_checkin.sh
 ```
 
-> **Note:** If you move the folder, re-run the block above from the new location to update the cron paths.
+### 4. Register the login launcher
+
+This creates a macOS LaunchAgent that opens a Terminal window with your todos every time you log in.
+
+Run this once, replacing the path if you cloned the repo somewhere other than `~/Desktop/VSCode/Claude Sandbox/todo-manager`:
+
+```bash
+SCRIPT_DIR="$(cd "$(pwd)" && pwd)"
+
+cat > ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.$(whoami).todo-manager</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$SCRIPT_DIR/todo_remind.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+launchctl load ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist
+```
+
+To verify it's registered:
+
+```bash
+launchctl list | grep todo-manager
+```
+
+> **If you move the folder**, unload the agent, delete the plist, and re-run the block above from the new location:
+> ```bash
+> launchctl unload ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist
+> rm ~/Library/LaunchAgents/com.$(whoami).todo-manager.plist
+> ```
+
+### 5. Grant macOS permissions
+
+The launcher uses AppleScript to open a Terminal window. On first run, macOS will prompt you to allow this. Click **Allow** when asked.
+
+If the Terminal window doesn't appear on login, go to:
+
+**System Settings → Privacy & Security → Automation**
+
+Make sure **Terminal** is allowed to be controlled by scripts.
+
+---
+
+## How it works
+
+Every time you log in, a Terminal window opens automatically showing:
+
+- All pending todos with age indicators
+- All active reminders with due-date urgency
+- Claude's priority recommendation for what to tackle first
+
+You can also trigger it manually at any time:
+
+```bash
+.venv/bin/python3 todo_manager.py remind
+```
 
 ---
 
 ## Usage
 
-All commands are run from inside the `todo-manager/` folder using the venv Python.
+All commands are run from inside the `todo-manager/` folder.
+
+### `todos` — All-in-one dashboard
+
+View everything, mark completions, and add new tasks in one session.
+
+```bash
+.venv/bin/python3 todo_manager.py todos
+```
+
+---
 
 ### `add` — Add tasks from natural language
 
-Just rant. Claude extracts and cleans up the individual tasks for you.
+Just describe what you need to do. Claude extracts and cleans up the individual tasks.
 
 ```bash
 .venv/bin/python3 todo_manager.py add "need to email the client back, fix that login bug in prod, and pick up dry cleaning before Saturday"
 ```
 
-You can also run it with no arguments for a multi-line prompt:
+Or run with no arguments for a multi-line prompt:
 
 ```bash
 .venv/bin/python3 todo_manager.py add
@@ -67,7 +164,19 @@ Added tasks:
 
 ---
 
-### `list` — View pending tasks with a priority recommendation
+### `reminder` — Add a deadline-based reminder
+
+Describe the task and its due date in plain English.
+
+```bash
+.venv/bin/python3 todo_manager.py reminder "need to file my taxes by April 15th"
+```
+
+---
+
+### `list` — View pending todos
+
+Shows all todos with age indicators and Claude's priority recommendation.
 
 ```bash
 .venv/bin/python3 todo_manager.py list
@@ -96,9 +205,17 @@ Age indicators:
 
 ---
 
-### `complete` — Mark tasks as done
+### `reminders` — View all reminders
 
-Pass one or more task IDs as a comma-separated list.
+```bash
+.venv/bin/python3 todo_manager.py reminders
+```
+
+---
+
+### `complete` — Mark todos as done
+
+Pass one or more IDs as a comma-separated list.
 
 ```bash
 .venv/bin/python3 todo_manager.py complete 1,3
@@ -113,9 +230,15 @@ Output:
 
 ---
 
-### `log` — View completed task history
+### `done-reminder` — Dismiss a reminder
 
-See every task you've finished and how long it took.
+```bash
+.venv/bin/python3 todo_manager.py done-reminder 2
+```
+
+---
+
+### `log` — View completion history
 
 ```bash
 .venv/bin/python3 todo_manager.py log
@@ -123,51 +246,15 @@ See every task you've finished and how long it took.
 
 Output:
 ```
-📊  Completed Tasks Log  (5 total)
+📊  Completed Log  (5 total)
 
   ✓  Reply to client email regarding project timeline
      Completed 2026-03-31  |  Took same day
   ✓  Pick up dry cleaning before Saturday
      Completed 2026-03-31  |  Took 8 days
-  ...
 
   Average completion time: 3.4 days
 ```
-
----
-
-### `remind` — Manual 1pm reminder
-
-Prints your task list and a priority recommendation. Also fires a macOS notification.
-
-```bash
-.venv/bin/python3 todo_manager.py remind
-```
-
-This runs automatically every day at 1pm via cron.
-
----
-
-### `checkin` — Manual 6pm check-in
-
-Interactive session: mark completions and add new tasks.
-
-```bash
-.venv/bin/python3 todo_manager.py checkin
-```
-
-This runs automatically every day at 6pm via cron (opens a new Terminal window).
-
----
-
-## How the daily automation works
-
-| Time | What happens |
-|------|-------------|
-| **1pm** | macOS notification fires. Your task list and Claude's priority pick print to the terminal (and to `todo_cron.log`). |
-| **6pm** | A new Terminal window opens with the interactive check-in. Mark what you finished, add anything new. |
-
-Cron output is appended to `todo_cron.log` in this folder.
 
 ---
 
@@ -176,14 +263,9 @@ Cron output is appended to `todo_cron.log` in this folder.
 | File | Purpose |
 |------|---------|
 | `todo_manager.py` | Main CLI script |
-| `todo_checkin.sh` | Shell wrapper that opens Terminal for the 6pm cron job |
-| `.venv/` | Python virtual environment (run `python3 -m venv .venv` to create) |
-| `todos.json` | Live task list (auto-created) |
-| `completed_log.json` | Completion history (auto-created) |
-| `todo_cron.log` | Cron job output log (auto-created) |
-
----
-
-## Model
-
-Uses your **Claude Code subscription** via `claude-agent-sdk` — no API key required. Runs whatever model your subscription provides.
+| `todo_remind.sh` | Opens a Terminal window at login with your todo summary |
+| `todo_checkin.sh` | Opens a Terminal window for an interactive check-in session |
+| `.venv/` | Python virtual environment (created during setup) |
+| `todos.json` | Live task list (auto-created on first use) |
+| `reminders.json` | Active reminders (auto-created on first use) |
+| `completed_log.json` | Completion history (auto-created on first use) |
