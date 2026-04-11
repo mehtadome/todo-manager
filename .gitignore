@@ -1,5 +1,6 @@
 # Runtime files
 .last_reminded
+.last_run
 completed_log.json
 reminders.json
 todo_cron.log
