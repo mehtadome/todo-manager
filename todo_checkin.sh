@@ -9,6 +9,6 @@ SCRIPT="$DIR/todo_manager.py"
 osascript <<EOF
 tell application "Terminal"
     activate
-    do script "echo ''; echo '🌆  Evening Todo Check-in'; \"$PYTHON\" \"$SCRIPT\" checkin; echo ''; echo 'Press any key to close...'; read -n1"
+    do script "echo ''; echo '🌆  Evening Todo Check-in'; \"$PYTHON\" \"$SCRIPT\" todos"
 end tell
 EOF

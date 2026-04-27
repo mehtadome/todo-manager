@@ -76,153 +76,24 @@ Make sure **Terminal** is allowed to be controlled by scripts.
 
 ## How it works
 
-Every time you log in, a Terminal window opens automatically showing:
-
-- All pending todos with age indicators
-- All active reminders with due-date urgency
-- Claude's priority recommendation for what to tackle first
-
-You can also trigger it manually at any time:
-
-```bash
-.venv/bin/python3 todo_manager.py remind
-```
-
----
-
-## Usage
-
-All commands are run from inside the `todo-manager/` folder.
-
-### `todos` — All-in-one dashboard
-
-View everything, mark completions, and add new tasks in one session.
+Every time you log in, a Terminal window opens automatically running `todos`. You can also trigger it manually at any time:
 
 ```bash
 .venv/bin/python3 todo_manager.py todos
 ```
 
----
+The session shows:
+- All pending todos with age indicators
+- Any active reminders with due-date urgency (display only)
+- Claude's priority recommendation
+- A prompt to mark todos done by number
+- A free-text prompt to add new todos
 
-### `add` — Add tasks from natural language
-
-Just describe what you need to do. Claude extracts and cleans up the individual tasks.
-
-```bash
-.venv/bin/python3 todo_manager.py add "need to email the client back, fix that login bug in prod, and pick up dry cleaning before Saturday"
-```
-
-Or run with no arguments for a multi-line prompt:
-
-```bash
-.venv/bin/python3 todo_manager.py add
-```
-
-Output:
-```
-Added tasks:
-  1. Reply to client email regarding project timeline
-  2. Fix production login bug
-  3. Pick up dry cleaning before Saturday
-
-✓ 3 task(s) added.
-```
-
----
-
-### `reminder` — Add a deadline-based reminder
-
-Describe the task and its due date in plain English.
-
-```bash
-.venv/bin/python3 todo_manager.py reminder "need to file my taxes by April 15th"
-```
-
----
-
-### `list` — View pending todos
-
-Shows all todos with age indicators and Claude's priority recommendation.
-
-```bash
-.venv/bin/python3 todo_manager.py list
-```
-
-Output:
-```
-📋  Pending Tasks  (3 total)
-
-  [ 1]  Reply to client email regarding project timeline
-         pending today
-  [ 2]  Fix production login bug
-         pending 4d  📌
-  [ 3]  Pick up dry cleaning before Saturday
-         pending 8d  ⚠️  overdue!
-
-🎯  Priority Recommendation
-
-   You've had the dry cleaning and the login bug sitting for several days —
-   tackle those first. The client email can follow.
-```
+Numbers displayed next to todos reset to `[1]` each session — always use what you see on screen.
 
 Age indicators:
 - `📌` — pending 3+ days
 - `⚠️ overdue!` — pending 7+ days
-
----
-
-### `reminders` — View all reminders
-
-```bash
-.venv/bin/python3 todo_manager.py reminders
-```
-
----
-
-### `complete` — Mark todos as done
-
-Pass one or more numbers from the list display, space-separated. Numbers reset to `1` each session — use whatever `list` or `todos` shows, not any previously noted number.
-
-```bash
-.venv/bin/python3 todo_manager.py complete 1 3
-```
-
-Output:
-```
-✅  Completed 2 task(s):
-   ✓  Reply to client email regarding project timeline  (same day)
-   ✓  Pick up dry cleaning before Saturday  (8 days)
-```
-
----
-
-### `done-reminder` — Dismiss a reminder
-
-Pass the number(s) shown in `reminders` or `todos`, space-separated. Like todos, numbers are positional and reset each session.
-
-```bash
-.venv/bin/python3 todo_manager.py done-reminder 2
-```
-
----
-
-### `log` — View completion history
-
-```bash
-.venv/bin/python3 todo_manager.py log
-```
-
-Output:
-```
-📊  Completed Log  (5 total)
-
-  ✓  Reply to client email regarding project timeline
-     Completed 2026-03-31  |  Took same day
-  ✓  Pick up dry cleaning before Saturday
-     Completed 2026-03-31  |  Took 8 days
-
-  Average completion time: 3.4 days
-```
 
 ---
 
@@ -232,8 +103,8 @@ Output:
 |------|---------|
 | `setup.sh` | One-time setup: venv, dependencies, data files, LaunchAgent |
 | `todo_manager.py` | Main CLI script |
-| `todo_remind.sh` | Opens a Terminal window at login with your todo summary |
-| `todo_checkin.sh` | Opens a Terminal window for an interactive check-in session |
+| `todo_remind.sh` | Opens a Terminal window at login |
+| `todo_checkin.sh` | Opens a Terminal window for an evening check-in |
 | `.venv/` | Python virtual environment (created by setup) |
 | `todos.json` | Live task list (created by setup) |
 | `reminders.json` | Active reminders (created by setup) |

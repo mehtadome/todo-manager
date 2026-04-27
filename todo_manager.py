@@ -35,11 +35,7 @@ def load_reminders():
     if REMINDERS_FILE.exists():
         with open(REMINDERS_FILE) as f:
             return json.load(f)
-    return {"reminders": [], "next_id": 1}
-
-def save_reminders(data):
-    with open(REMINDERS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    return {"reminders": []}
 
 def load_log():
     if COMPLETED_LOG_FILE.exists():
@@ -107,7 +103,6 @@ def notify(title: str, message: str):
 # ─── Claude helpers (via Claude Code subscription) ────────────────────────────
 
 async def ask_claude(prompt: str, system: str) -> str:
-    """Send a single prompt to Claude and return the result. Runs inside the shared event loop."""
     async for message in query(
         prompt=prompt,
         options=ClaudeAgentOptions(system_prompt=system, max_turns=1)
@@ -140,34 +135,6 @@ Example output:
         if line.strip() and line.strip() not in ('[', ']')
     ]
 
-async def parse_reminder(raw_text: str) -> dict | None:
-    today = date.today().isoformat()
-    system = f"""You are a reminder parser. Today's date is {today}.
-
-The user will describe something they need to do by a certain date. Extract:
-1. A clear, concise task description
-2. The due date in YYYY-MM-DD format
-
-Return ONLY a JSON object with keys "text" and "due_date". No preamble, no markdown.
-
-Examples:
-Input: "need to submit my tax return by april 15th"
-Output: {{"text": "Submit tax return", "due_date": "2026-04-15"}}
-
-Input: "remind me to renew my car registration, it expires end of this month"
-Output: {{"text": "Renew car registration", "due_date": "2026-04-30"}}"""
-
-    text = await ask_claude(raw_text, system)
-    match = re.search(r'\{.*?\}', text, re.DOTALL)
-    if match:
-        try:
-            parsed = json.loads(match.group())
-            if "text" in parsed and "due_date" in parsed:
-                return parsed
-        except json.JSONDecodeError:
-            pass
-    return None
-
 async def get_priority_recommendation(tasks: list[dict], reminders: list[dict]) -> str:
     lines = []
     if tasks:
@@ -182,7 +149,7 @@ async def get_priority_recommendation(tasks: list[dict], reminders: list[dict]) 
             lines.append(f"  [{i}] {r['text']} — {status} (due {r['due_date']})")
 
     system = """You are a productivity coach. The user has both open-ended todos and deadline-based reminders.
-Return ONLY a JSON object with two keys:
+Return ONLY a JSON object with three keys:
   "num": the [#] number of the single highest-priority item
   "type": "todo" or "reminder"
   "reason": one sentence explaining why, with no markdown formatting.
@@ -205,172 +172,13 @@ Factor in how long todos have been pending too."""
             pass
     return raw.replace("**", "")
 
-# ─── Commands ─────────────────────────────────────────────────────────────────
-
-async def cmd_add(args: list[str]):
-    if args:
-        raw_text = " ".join(args)
-    else:
-        raw_text = multiline_input("What do you need to get done? Just rant — I'll sort it out.\n(Press Enter twice when done)\n")
-        if not raw_text:
-            print("Nothing entered.")
-            return
-
-    print("\nProcessing...", flush=True)
-    tasks = await summarize_input(raw_text)
-    if not tasks:
-        print("Couldn't extract any tasks from that input.")
-        return
-
-    data = load_todos()
-    now = datetime.now().isoformat()
-
-    print("\nAdded tasks:")
-    for i, task_text in enumerate(tasks, 1):
-        task = {"id": data["next_id"], "text": task_text, "created_at": now}
-        data["tasks"].append(task)
-        data["next_id"] += 1
-        print(f"  {i}. {task_text}")
-
-    save_todos(data)
-    print(f"\n✓ {len(tasks)} task(s) added.")
-
-async def cmd_add_reminder(raw_text: str = ""):
-    if not raw_text:
-        raw_text = multiline_input("Describe what you need to do and by when.\n(Press Enter twice when done)\n")
-        if not raw_text:
-            print("Nothing entered.")
-            return
-
-    print("\nProcessing...", flush=True)
-    parsed = await parse_reminder(raw_text)
-    if not parsed:
-        print("Couldn't extract a task and date from that. Try: \"submit report by April 10th\"")
-        return
-
-    data = load_reminders()
-    reminder = {
-        "id": data["next_id"],
-        "text": parsed["text"],
-        "due_date": parsed["due_date"],
-        "created_at": datetime.now().isoformat()
-    }
-    data["reminders"].append(reminder)
-    data["next_id"] += 1
-    save_reminders(data)
-
-    left = days_until(parsed["due_date"])
-    print(f"\n  🔔  {parsed['text']}")
-    print(f"      Due {parsed['due_date']}{urgency_label(left)}")
-    print("\n✓ Reminder saved.")
-
-def cmd_complete_reminder(args: list[str]):
-    if not args:
-        print("Usage: done-reminder <id1 id2 ...>")
-        return
-    try:
-        ids = {int(x) for x in args}
-    except ValueError:
-        print("Error: IDs must be comma-separated integers.")
-        return
-
-    data = load_reminders()
-    log = load_log()
-    now = datetime.now().isoformat()
-
-    sorted_reminders = sorted(data["reminders"], key=lambda r: r["due_date"])
-    selected = {sorted_reminders[i - 1]["id"] for i in ids if i <= len(sorted_reminders)}
-
-    done, remaining = [], []
-    for r in data["reminders"]:
-        if r["id"] in selected:
-            left = days_until(r["due_date"])
-            log["completed"].append({
-                "id": r["id"], "text": r["text"], "due_date": r["due_date"],
-                "created_at": r["created_at"], "completed_at": now,
-                "days_to_complete": days_pending(r["created_at"]),
-                "days_before_due": left, "type": "reminder"
-            })
-            done.append(r)
-        else:
-            remaining.append(r)
-
-    if not done:
-        print("No matching reminder IDs found.")
-        return
-
-    data["reminders"] = remaining
-    save_reminders(data)
-    save_log(log)
-
-    print(f"\n✅  Dismissed {len(done)} reminder(s):")
-    for r in done:
-        left = days_until(r["due_date"])
-        timing = "on time" if left >= 0 else f"{abs(left)}d late"
-        print(f"   ✓  {r['text']}  ({timing})")
-
-def _print_reminders(reminders: list[dict]):
-    for i, r in enumerate(sorted(reminders, key=lambda r: r["due_date"]), 1):
-        left = days_until(r["due_date"])
-        print(f"  [{i}]  {r['text']}")
-        print(f"         {r['due_date']}{urgency_label(left)}")
-
-def cmd_list_reminders():
-    data = load_reminders()
-    reminders = data["reminders"]
-    if not reminders:
-        print("\nNo reminders set.")
-        return
-    print(f"\n🔔  Reminders  ({len(reminders)} total)\n")
-    _print_reminders(reminders)
-    print()
-
-def cmd_complete(args: list[str]):
-    if not args:
-        print("Usage: complete <id1 id2 ...>  (e.g. complete 1 3)")
-        return
-    try:
-        ids = {int(x) for x in args}
-    except ValueError:
-        print("Error: IDs must be comma-separated integers.")
-        return
-
-    data = load_todos()
-    log = load_log()
-    now = datetime.now().isoformat()
-
-    done, remaining = [], []
-    for i, task in enumerate(data["tasks"], 1):
-        if i in ids:
-            days = days_pending(task["created_at"])
-            log["completed"].append({
-                "id": task["id"], "text": task["text"],
-                "created_at": task["created_at"], "completed_at": now,
-                "days_to_complete": days, "type": "todo"
-            })
-            done.append((task, days))
-        else:
-            remaining.append(task)
-
-    if not done:
-        print("No matching task IDs found. Use `list` to see current numbers.")
-        return
-
-    data["tasks"] = remaining
-    save_todos(data)
-    save_log(log)
-
-    print(f"\n✅  Completed {len(done)} task(s):")
-    for task, days in done:
-        duration = "same day" if days == 0 else f"{days} day{'s' if days != 1 else ''}"
-        print(f"   ✓  {task['text']}  ({duration})")
+# ─── Command ──────────────────────────────────────────────────────────────────
 
 async def cmd_todos():
     tasks = load_todos()["tasks"]
     reminders = load_reminders()["reminders"]
-    has_anything = tasks or reminders
 
-    # ── Section 1: Todos ──────────────────────────────────────────────────────
+    # ── Todos ─────────────────────────────────────────────────────────────────
     if tasks:
         print(f"\n━━━  📋  TODOS  ({len(tasks)} pending)  ━━━\n")
         for i, task in enumerate(tasks, 1):
@@ -383,200 +191,86 @@ async def cmd_todos():
         print("\n━━━  📋  TODOS  ━━━\n")
         print("  No pending todos.")
 
-    # ── Section 2: Reminders ──────────────────────────────────────────────────
+    # ── Reminders (display only) ───────────────────────────────────────────────
     if reminders:
         print(f"\n━━━  🔔  REMINDERS  ({len(reminders)} active)  ━━━\n")
-        _print_reminders(reminders)
-    else:
-        print(f"\n━━━  🔔  REMINDERS  ━━━\n")
-        print("  No reminders set.")
+        for i, r in enumerate(sorted(reminders, key=lambda r: r["due_date"]), 1):
+            left = days_until(r["due_date"])
+            print(f"  [{i}]  {r['text']}")
+            print(f"         {r['due_date']}{urgency_label(left)}")
 
-    # ── Priority recommendation ───────────────────────────────────────────────
-    if has_anything:
+    # ── Priority recommendation ────────────────────────────────────────────────
+    if tasks or reminders:
         print("\n🎯  Priority Recommendation\n")
         rec = await get_priority_recommendation(tasks, reminders)
-        for line in rec.splitlines():
-            print(f"   {line}")
+        print(f"   {rec}")
 
-    # ── Step 1: Mark todos done ───────────────────────────────────────────────
+    # ── Complete todos ─────────────────────────────────────────────────────────
     if tasks:
-        print("\nMark any todos as done? Enter IDs (space-separated), or press Enter to skip:")
+        print("\nMark any todos as done? Enter numbers (space-separated), or press Enter to skip:")
         try:
             done_input = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print(); return
+
         if done_input:
-            cmd_complete(done_input.split())
+            try:
+                ids = {int(x) for x in done_input.split()}
+            except ValueError:
+                print("Invalid input — enter space-separated numbers.")
+                return
 
-    # ── Step 2: Dismiss reminders ─────────────────────────────────────────────
-    if reminders:
-        print("\nDismiss any reminders? Enter IDs (space-separated), or press Enter to skip:")
-        try:
-            dismiss_input = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print(); return
-        if dismiss_input:
-            cmd_complete_reminder(dismiss_input.split())
+            data = load_todos()
+            log = load_log()
+            now = datetime.now().isoformat()
+            done, remaining = [], []
+            for i, task in enumerate(data["tasks"], 1):
+                if i in ids:
+                    days = days_pending(task["created_at"])
+                    log["completed"].append({
+                        "id": task["id"], "text": task["text"],
+                        "created_at": task["created_at"], "completed_at": now,
+                        "days_to_complete": days, "type": "todo"
+                    })
+                    done.append((task, days))
+                else:
+                    remaining.append(task)
+            data["tasks"] = remaining
+            save_todos(data)
+            save_log(log)
+            if done:
+                print(f"\n✅  Completed {len(done)} task(s):")
+                for task, days in done:
+                    duration = "same day" if days == 0 else f"{days} day{'s' if days != 1 else ''}"
+                    print(f"   ✓  {task['text']}  ({duration})")
 
-    # ── Step 3: New todos ─────────────────────────────────────────────────────
-    print("\n─── New todos? ───")
+    # ── Add new todos ──────────────────────────────────────────────────────────
+    print("\n─── Anything else to add? ───")
     new_todos = multiline_input("Rant freely — press Enter twice when done, or just Enter twice to skip:\n")
     if new_todos:
-        await cmd_add([new_todos])
+        print("\nProcessing...", flush=True)
+        new_tasks = await summarize_input(new_todos)
+        if new_tasks:
+            data = load_todos()
+            now = datetime.now().isoformat()
+            print("\nAdded tasks:")
+            for i, task_text in enumerate(new_tasks, 1):
+                task = {"id": data["next_id"], "text": task_text, "created_at": now}
+                data["tasks"].append(task)
+                data["next_id"] += 1
+                print(f"  {i}. {task_text}")
+            save_todos(data)
+            print(f"\n✓ {len(new_tasks)} task(s) added.")
 
-    # ── Step 4: New reminders ─────────────────────────────────────────────────
-    print("\n─── New reminders? ───")
-    new_reminder = multiline_input("Describe what you need to do and by when — press Enter twice when done, or just Enter twice to skip:\n")
-    if new_reminder:
-        await cmd_add_reminder(new_reminder)
-
-    print()
-
-async def cmd_list(silent=False) -> list[dict]:
-    data = load_todos()
-    tasks = data["tasks"]
-
-    if not tasks:
-        if not silent:
-            print("\nNo pending tasks! You're all caught up 🎉")
-        return []
-
-    if not silent:
-        print(f"\n📋  Pending Tasks  ({len(tasks)} total)\n")
-        for i, task in enumerate(tasks, 1):
-            age = days_pending(task["created_at"])
-            age_str = "today" if age == 0 else f"{age}d"
-            flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i}]  {task['text']}")
-            print(f"         pending {age_str}{flag}")
-
-        reminders = load_reminders()["reminders"]
-        print("\n🎯  Priority Recommendation\n")
-        rec = await get_priority_recommendation(tasks, reminders)
-        for line in rec.splitlines():
-            print(f"   {line}")
-        print()
-
-    return tasks
-
-async def cmd_remind():
-    tasks = load_todos()["tasks"]
-    reminders = load_reminders()["reminders"]
-    urgent_reminders = [r for r in reminders if days_until(r["due_date"]) <= 3]
-
-    if not tasks and not reminders:
-        notify("📋 Daily Reminder", "Nothing pending — you're all caught up!")
-        print("\n☀️  Good afternoon! Nothing pending — you're all caught up 🎉")
-        return
-
-    notif_parts = []
-    if tasks:
-        notif_parts.append(f"{len(tasks)} todo(s)")
-    if urgent_reminders:
-        notif_parts.append(f"{len(urgent_reminders)} urgent reminder(s)")
-    elif reminders:
-        notif_parts.append(f"{len(reminders)} reminder(s)")
-    notify("📋 Daily Reminder", ", ".join(notif_parts) + " pending.")
-
-    if tasks:
-        print(f"\n☀️  Daily Reminder — {len(tasks)} todo(s)\n")
-        for i, task in enumerate(tasks, 1):
-            age = days_pending(task["created_at"])
-            age_str = "today" if age == 0 else f"{age}d"
-            flag = "  ⚠️" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i}]  {task['text']}  ({age_str}){flag}")
-
-    if reminders:
-        print(f"\n🔔  Reminders\n")
-        _print_reminders(reminders)
-
-    print("\n🎯  Today's Priority:\n")
-    rec = await get_priority_recommendation(tasks, reminders)
-    for line in rec.splitlines():
-        print(f"   {line}")
-    print()
-
-async def cmd_checkin():
-    tasks = load_todos()["tasks"]
-    reminders = load_reminders()["reminders"]
-    notify("📋 Evening Check-in",
-           f"{len(tasks)} todo(s), {len(reminders)} reminder(s) pending. Time to check in!")
-    await cmd_todos()
-
-def cmd_log():
-    log = load_log()
-    completed = log["completed"]
-
-    if not completed:
-        print("\nNothing completed yet.")
-        return
-
-    print(f"\n📊  Completed Log  ({len(completed)} total)\n")
-    for entry in sorted(completed, key=lambda x: x["completed_at"], reverse=True):
-        done_date = datetime.fromisoformat(entry["completed_at"]).strftime("%Y-%m-%d")
-        days = entry["days_to_complete"]
-        duration = "same day" if days == 0 else f"{days} day{'s' if days != 1 else ''}"
-        tag = "🔔" if entry.get("type") == "reminder" else "✓"
-        extra = ""
-        if entry.get("type") == "reminder" and "days_before_due" in entry:
-            left = entry["days_before_due"]
-            extra = f"  |  {'on time' if left >= 0 else f'{abs(left)}d late'}"
-        print(f"  {tag}  {entry['text']}")
-        print(f"     Completed {done_date}  |  Took {duration}{extra}")
-
-    if len(completed) > 1:
-        avg = sum(e["days_to_complete"] for e in completed) / len(completed)
-        print(f"\n  Average completion time: {avg:.1f} days")
     print()
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
-USAGE = """
-AI-Powered Todo Task Manager
-
-Commands:
-  todos              Show everything, mark done, add new (all-in-one)
-  add [text...]      Add todos (rant freely)
-  reminder           Add a deadline-based reminder
-  list               Show pending todos + priority recommendation
-  reminders          Show all reminders
-  complete <ids>     Mark todos done by ID
-  done-reminder <ids>  Dismiss reminders by ID
-  remind             1pm summary (runs automatically via cron)
-  checkin            6pm check-in (runs automatically via cron)
-  log                View completed history
-"""
-
 async def main():
-    if len(sys.argv) < 2:
-        print(USAGE)
-        return
-
-    cmd = sys.argv[1].lower()
-    args = sys.argv[2:]
-
-    async_commands = {
-        "todos": cmd_todos,
-        "add": lambda: cmd_add(args),
-        "reminder": cmd_add_reminder,
-        "list": cmd_list,
-        "remind": cmd_remind,
-        "checkin": cmd_checkin,
-    }
-    sync_commands = {
-        "reminders": cmd_list_reminders,
-        "complete": lambda: cmd_complete(args),
-        "done-reminder": lambda: cmd_complete_reminder(args),
-        "log": cmd_log,
-    }
-
-    if cmd in async_commands:
-        await async_commands[cmd]()
-    elif cmd in sync_commands:
-        sync_commands[cmd]()
-    else:
-        print(f"Unknown command: '{cmd}'\n{USAGE}")
+    if len(sys.argv) > 1 and sys.argv[1].lower() != "todos":
+        print(f"Unknown command: '{sys.argv[1]}'. Only 'todos' is supported.")
         sys.exit(1)
+    await cmd_todos()
 
 if __name__ == "__main__":
     anyio.run(main)
