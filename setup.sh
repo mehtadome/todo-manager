@@ -20,8 +20,8 @@ echo "Installing dependencies..."
 
 # ── Shell scripts ─────────────────────────────────────────────────────────────
 
-chmod +x "$SCRIPT_DIR/todo_remind.sh"
-chmod +x "$SCRIPT_DIR/todo_checkin.sh"
+chmod +x "$SCRIPT_DIR/scripts/todo_remind.sh"
+chmod +x "$SCRIPT_DIR/scripts/todo_checkin.sh"
 
 # ── Runtime files ─────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ cat > "$PLIST_PATH" << EOF
     <string>$PLIST_LABEL</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$SCRIPT_DIR/todo_remind.sh</string>
+        <string>$SCRIPT_DIR/scripts/todo_remind.sh</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

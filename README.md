@@ -116,8 +116,8 @@ This means Claude is called at most once per login session under normal use, and
 |------|---------|
 | `setup.sh` | One-time setup: venv, dependencies, data files, LaunchAgent |
 | `todo_manager.py` | Main CLI script |
-| `todo_remind.sh` | Opens a Terminal window at login |
-| `todo_checkin.sh` | Opens a Terminal window for an evening check-in |
+| `scripts/todo_remind.sh` | Opens a Terminal window at login |
+| `scripts/todo_checkin.sh` | Opens a Terminal window for an evening check-in |
 | `.venv/` | Python virtual environment (created by setup) |
 | `assets/todos.json` | Live task list (created by setup) |
 | `assets/reminders.json` | Active reminders (created by setup) |
