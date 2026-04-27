@@ -290,9 +290,9 @@ def cmd_complete_reminder(args: list[str]):
         print(f"   ✓  {r['text']}  ({timing})")
 
 def _print_reminders(reminders: list[dict]):
-    for r in sorted(reminders, key=lambda r: r["due_date"]):
+    for i, r in enumerate(sorted(reminders, key=lambda r: r["due_date"]), 1):
         left = days_until(r["due_date"])
-        print(f"  [{r['id']:>2}]  {r['text']}")
+        print(f"  [{i:>2}]  {r['text']}")
         print(f"         due {r['due_date']}{urgency_label(left)}")
 
 def cmd_list_reminders():
@@ -353,11 +353,11 @@ async def cmd_todos():
     # ── Section 1: Todos ──────────────────────────────────────────────────────
     if tasks:
         print(f"\n━━━  📋  TODOS  ({len(tasks)} pending)  ━━━\n")
-        for task in tasks:
+        for i, task in enumerate(tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
             flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{task['id']:>2}]  {task['text']}")
+            print(f"  [{i:>2}]  {task['text']}")
             print(f"         pending {age_str}{flag}")
     else:
         print("\n━━━  📋  TODOS  ━━━\n")
@@ -423,11 +423,11 @@ async def cmd_list(silent=False) -> list[dict]:
 
     if not silent:
         print(f"\n📋  Pending Tasks  ({len(tasks)} total)\n")
-        for task in tasks:
+        for i, task in enumerate(tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
             flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{task['id']:>2}]  {task['text']}")
+            print(f"  [{i:>2}]  {task['text']}")
             print(f"         pending {age_str}{flag}")
 
         reminders = load_reminders()["reminders"]
@@ -460,11 +460,11 @@ async def cmd_remind():
 
     if tasks:
         print(f"\n☀️  Daily Reminder — {len(tasks)} todo(s)\n")
-        for task in tasks:
+        for i, task in enumerate(tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
             flag = "  ⚠️" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{task['id']:>2}]  {task['text']}  ({age_str}){flag}")
+            print(f"  [{i:>2}]  {task['text']}  ({age_str}){flag}")
 
     if reminders:
         print(f"\n🔔  Reminders\n")
