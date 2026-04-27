@@ -27,17 +27,19 @@ chmod +x "$SCRIPT_DIR/todo_checkin.sh"
 
 echo "Initializing data files..."
 
-# .last_run left empty so the reminder fires on the very first login
-touch "$SCRIPT_DIR/.last_run"
+mkdir -p "$SCRIPT_DIR/assets"
 
-[ -f "$SCRIPT_DIR/todos.json" ] || \
-    echo '{"tasks": [], "next_id": 1}' > "$SCRIPT_DIR/todos.json"
+# .last_reminded left empty so the reminder fires on the very first login
+touch "$SCRIPT_DIR/assets/.last_reminded"
 
-[ -f "$SCRIPT_DIR/reminders.json" ] || \
-    echo '{"reminders": [], "next_id": 1}' > "$SCRIPT_DIR/reminders.json"
+[ -f "$SCRIPT_DIR/assets/todos.json" ] || \
+    echo '{"tasks": [], "next_id": 1}' > "$SCRIPT_DIR/assets/todos.json"
 
-[ -f "$SCRIPT_DIR/completed_log.json" ] || \
-    echo '{"completed": []}' > "$SCRIPT_DIR/completed_log.json"
+[ -f "$SCRIPT_DIR/assets/reminders.json" ] || \
+    echo '{"reminders": [], "next_id": 1}' > "$SCRIPT_DIR/assets/reminders.json"
+
+[ -f "$SCRIPT_DIR/assets/completed_log.json" ] || \
+    echo '{"completed": []}' > "$SCRIPT_DIR/assets/completed_log.json"
 
 # ── LaunchAgent ───────────────────────────────────────────────────────────────
 

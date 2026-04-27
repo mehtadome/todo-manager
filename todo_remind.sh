@@ -5,7 +5,7 @@
 DIR="/Users/ruchir/Desktop/VSCode/Claude Sandbox/todo-manager"
 PYTHON="$DIR/.venv/bin/python3"
 SCRIPT="$DIR/todo_manager.py"
-LAST_RUN_FILE="$DIR/.last_run"
+LAST_RUN_FILE="$DIR/assets/.last_reminded"
 
 TODAY="$(date +%Y-%m-%d)"
 if [ -f "$LAST_RUN_FILE" ] && [ "$(cat "$LAST_RUN_FILE")" = "$TODAY" ]; then

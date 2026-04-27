@@ -15,10 +15,11 @@ from pathlib import Path
 from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
 
 SCRIPT_DIR = Path(__file__).parent
-TODOS_FILE = SCRIPT_DIR / "todos.json"
-REMINDERS_FILE = SCRIPT_DIR / "reminders.json"
-COMPLETED_LOG_FILE = SCRIPT_DIR / "completed_log.json"
-PRIORITY_CACHE_FILE = SCRIPT_DIR / "priority_cache.json"
+ASSETS_DIR = SCRIPT_DIR / "assets"
+TODOS_FILE = ASSETS_DIR / "todos.json"
+REMINDERS_FILE = ASSETS_DIR / "reminders.json"
+COMPLETED_LOG_FILE = ASSETS_DIR / "completed_log.json"
+PRIORITY_CACHE_FILE = ASSETS_DIR / "priority_cache.json"
 
 # ─── Data helpers ────────────────────────────────────────────────────────────
 

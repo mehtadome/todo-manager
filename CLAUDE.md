@@ -25,14 +25,14 @@ All commands use the venv Python, run from the repo root:
 bash setup.sh   # creates .venv, installs deps, initializes data files, registers macOS LaunchAgent
 ```
 
-The LaunchAgent (`~/Library/LaunchAgents/com.<user>.todo-manager.plist`) calls `todo_remind.sh` at login, which opens a Terminal window showing the daily summary — but only once per day (guarded by `.last_run`).
+The LaunchAgent (`~/Library/LaunchAgents/com.<user>.todo-manager.plist`) calls `todo_remind.sh` at login, which opens a Terminal window showing the daily summary — but only once per day (guarded by `assets/.last_reminded`).
 
 ## Architecture
 
 **Single-file CLI** — everything lives in `todo_manager.py`:
 
-- **Data layer**: `todos.json`, `reminders.json`, `completed_log.json` — plain JSON files stored next to the script. `load_*/save_*` helpers read/write them directly with no ORM.
-- **AI layer**: `ask_claude()` calls `claude_agent_sdk.query()` (uses Claude Code subscription, no API key). Three AI functions: `summarize_input` (NL → task list), `parse_reminder` (NL → `{text, due_date}`), `get_priority_recommendation` (tasks + reminders → 2–4 sentence advice). All return structured output parsed from Claude's response via `re.search`.
+- **Data layer**: `assets/todos.json`, `assets/reminders.json`, `assets/completed_log.json`, `assets/priority_cache.json` — plain JSON files stored in the `assets/` subdirectory. `load_*/save_*` helpers read/write them directly with no ORM.
+- **AI layer**: `ask_claude()` calls `claude_agent_sdk.query()` (uses Claude Code subscription, no API key). Three AI functions: `summarize_input` (NL → task list), `parse_reminders` (NL → list of `{text, due_date}`), `get_priority_recommendation` (todos → one-sentence priority pick). All return structured output parsed from Claude's response via `re.search`.
 - **Commands**: async commands (`todos`, `add`, `reminder`, `list`, `remind`, `checkin`) use `anyio.run(main)`. Sync commands (`reminders`, `complete`, `done-reminder`, `log`) run directly. Async and sync command tables are separate dicts in `main()`.
 - **Shell scripts**: `todo_remind.sh` (login, non-interactive) and `todo_checkin.sh` (evening, interactive) use AppleScript to open a Terminal window and run the appropriate command inside it.
 
