@@ -182,13 +182,28 @@ async def get_priority_recommendation(tasks: list[dict], reminders: list[dict]) 
             lines.append(f"  [{i}] {r['text']} — {status} (due {r['due_date']})")
 
     system = """You are a productivity coach. The user has both open-ended todos and deadline-based reminders.
-Give a direct, actionable priority recommendation in exactly one sentence.
-Reference items by their [#] number shown in the list.
-Treat overdue and imminent reminders (≤3 days) as highest urgency — call them out explicitly.
-Factor in how long todos have been pending too.
-Do not use markdown formatting."""
+Return ONLY a JSON object with two keys:
+  "num": the [#] number of the single highest-priority item
+  "type": "todo" or "reminder"
+  "reason": one sentence explaining why, with no markdown formatting.
+Treat overdue and imminent reminders (≤3 days) as highest urgency.
+Factor in how long todos have been pending too."""
 
-    return (await ask_claude("\n".join(lines) + "\n\nWhat should I tackle first and why?", system)).replace("**", "")
+    raw = await ask_claude("\n".join(lines) + "\n\nWhat should I tackle first and why?", system)
+    match = re.search(r'\{.*?\}', raw, re.DOTALL)
+    if match:
+        try:
+            parsed = json.loads(match.group())
+            num = int(parsed["num"])
+            reason = parsed["reason"].replace("**", "")
+            if parsed.get("type") == "reminder":
+                item_text = sorted(reminders, key=lambda r: r["due_date"])[num - 1]["text"]
+            else:
+                item_text = tasks[num - 1]["text"]
+            return f"[{num}] {item_text}: {reason}"
+        except (KeyError, IndexError, ValueError, json.JSONDecodeError):
+            pass
+    return raw.replace("**", "")
 
 # ─── Commands ─────────────────────────────────────────────────────────────────
 
