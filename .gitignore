@@ -5,6 +5,7 @@ completed_log.json
 reminders.json
 todo_cron.log
 todos.json
+priority_cache.json
 
 # Python
 .venv/
