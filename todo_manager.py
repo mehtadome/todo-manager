@@ -182,7 +182,7 @@ async def get_priority_recommendation(tasks: list[dict], reminders: list[dict]) 
             lines.append(f"  {i+1}. [ID {r['id']}] {r['text']} — {status} (due {r['due_date']})")
 
     system = """You are a productivity coach. The user has both open-ended todos and deadline-based reminders.
-Give a direct, actionable priority recommendation in 2–4 sentences.
+Give a direct, actionable priority recommendation in exactly one sentence.
 Treat overdue and imminent reminders (≤3 days) as highest urgency — call them out explicitly.
 Factor in how long todos have been pending too."""
 
