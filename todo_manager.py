@@ -152,33 +152,28 @@ Example output:
         if line.strip() and line.strip() not in ('[', ']')
     ]
 
-async def parse_reminder(raw_text: str) -> dict | None:
+async def parse_reminders(raw_text: str) -> list[dict]:
     today = date.today().isoformat()
     system = f"""You are a reminder parser. Today's date is {today}.
 
-The user will describe something they need to do by a certain date. Extract:
-1. A clear, concise task description
-2. The due date in YYYY-MM-DD format
-
-Return ONLY a JSON object with keys "text" and "due_date". No preamble, no markdown.
+The user will describe one or more things they need to do by certain dates. Extract each one and return ONLY a valid JSON array of objects, each with keys "text" and "due_date" (YYYY-MM-DD). No preamble, no markdown.
 
 Examples:
 Input: "need to submit my tax return by april 15th"
-Output: {{"text": "Submit tax return", "due_date": "2026-04-15"}}
+Output: [{{"text": "Submit tax return", "due_date": "2026-04-15"}}]
 
-Input: "remind me to renew my car registration, it expires end of this month"
-Output: {{"text": "Renew car registration", "due_date": "2026-04-30"}}"""
+Input: "dentist thursday at 2pm, renew car registration end of month"
+Output: [{{"text": "Dentist appointment", "due_date": "2026-04-30"}}, {{"text": "Renew car registration", "due_date": "2026-04-30"}}]"""
 
     text = await ask_claude(raw_text, system)
-    match = re.search(r'\{.*?\}', text, re.DOTALL)
+    match = re.search(r'\[.*?\]', text, re.DOTALL)
     if match:
         try:
             parsed = json.loads(match.group())
-            if "text" in parsed and "due_date" in parsed:
-                return parsed
+            return [r for r in parsed if "text" in r and "due_date" in r]
         except json.JSONDecodeError:
             pass
-    return None
+    return []
 
 async def get_priority_recommendation(tasks: list[dict]) -> str:
     lines = ["TODOS:"]
@@ -288,6 +283,46 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
                     duration = "same day" if days == 0 else f"{days} day{'s' if days != 1 else ''}"
                     print(f"   ✓  {task['text']}  ({duration})")
 
+    # ── Complete reminders ────────────────────────────────────────────────────
+    if reminders:
+        print("\nMark any reminders as done? Enter numbers (space-separated), or press Enter to skip:")
+        try:
+            done_rem_input = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(); return
+
+        if done_rem_input:
+            try:
+                rem_ids = {int(x) for x in done_rem_input.split()}
+            except ValueError:
+                print("Invalid input — enter space-separated numbers.")
+                return
+
+            sorted_reminders = sorted(reminders, key=lambda r: r["due_date"])
+            data = load_reminders()
+            log = load_log()
+            now = datetime.now().isoformat()
+            done_rems, remaining_rems = [], []
+            for i, reminder in enumerate(sorted_reminders, 1):
+                if i in rem_ids:
+                    log["completed"].append({
+                        "id": reminder["id"], "text": reminder["text"],
+                        "due_date": reminder["due_date"],
+                        "created_at": reminder["created_at"], "completed_at": now,
+                        "type": "reminder"
+                    })
+                    done_rems.append(reminder)
+                else:
+                    remaining_rems.append(reminder)
+            data["reminders"] = remaining_rems
+            with open(REMINDERS_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+            save_log(log)
+            if done_rems:
+                print(f"\n✅  Completed {len(done_rems)} reminder(s):")
+                for r in done_rems:
+                    print(f"   ✓  {r['text']}")
+
     # ── Add new todos ──────────────────────────────────────────────────────────
     print("\n─── New todos? (reminders will be asked next) ───")
     try:
@@ -317,27 +352,30 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
         print(); return
     if new_reminder:
         print("\nProcessing...", flush=True)
-        parsed = await parse_reminder(new_reminder)
-        if parsed:
+        parsed_list = await parse_reminders(new_reminder)
+        if parsed_list:
             data = load_reminders()
             if "next_id" not in data:
                 data["next_id"] = len(data["reminders"]) + 1
-            reminder = {
-                "id": data["next_id"],
-                "text": parsed["text"],
-                "due_date": parsed["due_date"],
-                "created_at": datetime.now().isoformat()
-            }
-            data["reminders"].append(reminder)
-            data["next_id"] += 1
+            now = datetime.now().isoformat()
+            print()
+            for parsed in parsed_list:
+                reminder = {
+                    "id": data["next_id"],
+                    "text": parsed["text"],
+                    "due_date": parsed["due_date"],
+                    "created_at": now,
+                }
+                data["reminders"].append(reminder)
+                data["next_id"] += 1
+                left = days_until(parsed["due_date"])
+                print(f"  🔔  {parsed['text']}")
+                print(f"       {parsed['due_date']}{urgency_label(left)}")
             with open(REMINDERS_FILE, "w") as f:
                 json.dump(data, f, indent=2)
-            left = days_until(parsed["due_date"])
-            print(f"\n  🔔  {parsed['text']}")
-            print(f"       {parsed['due_date']}{urgency_label(left)}")
-            print("\n✓ Reminder saved.")
+            print(f"\n✓ {len(parsed_list)} reminder(s) saved.")
         else:
-            print("Couldn't extract a task and date — try: \"submit report by April 10th\"")
+            print("Couldn't extract any reminders — try: \"dentist tomorrow at 2pm\"")
 
     print()
 
