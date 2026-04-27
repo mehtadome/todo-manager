@@ -249,10 +249,10 @@ async def cmd_add_reminder(raw_text: str = ""):
 
 def cmd_complete_reminder(args: list[str]):
     if not args:
-        print("Usage: done-reminder <id1,id2,...>")
+        print("Usage: done-reminder <id1 id2 ...>")
         return
     try:
-        ids = {int(x.strip()) for x in args[0].split(",")}
+        ids = {int(x) for x in args}
     except ValueError:
         print("Error: IDs must be comma-separated integers.")
         return
@@ -307,10 +307,10 @@ def cmd_list_reminders():
 
 def cmd_complete(args: list[str]):
     if not args:
-        print("Usage: complete <id1,id2,...>  (e.g. complete 1,3)")
+        print("Usage: complete <id1 id2 ...>  (e.g. complete 1 3)")
         return
     try:
-        ids = {int(x.strip()) for x in args[0].split(",")}
+        ids = {int(x) for x in args}
     except ValueError:
         print("Error: IDs must be comma-separated integers.")
         return
@@ -380,23 +380,23 @@ async def cmd_todos():
 
     # ── Step 1: Mark todos done ───────────────────────────────────────────────
     if tasks:
-        print("\nMark any todos as done? Enter IDs (comma-separated), or press Enter to skip:")
+        print("\nMark any todos as done? Enter IDs (space-separated), or press Enter to skip:")
         try:
             done_input = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print(); return
         if done_input:
-            cmd_complete([done_input])
+            cmd_complete(done_input.split())
 
     # ── Step 2: Dismiss reminders ─────────────────────────────────────────────
     if reminders:
-        print("\nDismiss any reminders? Enter IDs (comma-separated), or press Enter to skip:")
+        print("\nDismiss any reminders? Enter IDs (space-separated), or press Enter to skip:")
         try:
             dismiss_input = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print(); return
         if dismiss_input:
-            cmd_complete_reminder([dismiss_input])
+            cmd_complete_reminder(dismiss_input.split())
 
     # ── Step 3: New todos ─────────────────────────────────────────────────────
     print("\n─── New todos? ───")

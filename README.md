@@ -181,10 +181,10 @@ Age indicators:
 
 ### `complete` — Mark todos as done
 
-Pass one or more numbers from the list display as a comma-separated list. Numbers reset to `1` each session — use whatever `list` or `todos` shows, not any previously noted number.
+Pass one or more numbers from the list display, space-separated. Numbers reset to `1` each session — use whatever `list` or `todos` shows, not any previously noted number.
 
 ```bash
-.venv/bin/python3 todo_manager.py complete 1,3
+.venv/bin/python3 todo_manager.py complete 1 3
 ```
 
 Output:
@@ -198,7 +198,7 @@ Output:
 
 ### `done-reminder` — Dismiss a reminder
 
-Pass the number shown in `reminders` or `todos`. Like todos, numbers are positional and reset each session.
+Pass the number(s) shown in `reminders` or `todos`, space-separated. Like todos, numbers are positional and reset each session.
 
 ```bash
 .venv/bin/python3 todo_manager.py done-reminder 2
