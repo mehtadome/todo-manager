@@ -135,26 +135,16 @@ Example output:
         if line.strip() and line.strip() not in ('[', ']')
     ]
 
-async def get_priority_recommendation(tasks: list[dict], reminders: list[dict]) -> str:
-    lines = []
-    if tasks:
-        lines.append("TODOS (no fixed deadline):")
-        for i, t in enumerate(tasks, 1):
-            lines.append(f"  [{i}] {t['text']} — pending {days_pending(t['created_at'])} day(s)")
-    if reminders:
-        lines.append("\nREMINDERS (deadline-based):")
-        for i, r in enumerate(reminders, 1):
-            left = days_until(r["due_date"])
-            status = f"OVERDUE by {abs(left)}d" if left < 0 else (f"due in {left}d" if left > 0 else "DUE TODAY")
-            lines.append(f"  [{i}] {r['text']} — {status} (due {r['due_date']})")
+async def get_priority_recommendation(tasks: list[dict]) -> str:
+    lines = ["TODOS:"]
+    for i, t in enumerate(tasks, 1):
+        lines.append(f"  [{i}] {t['text']} — pending {days_pending(t['created_at'])} day(s)")
 
-    system = """You are a productivity coach. The user has both open-ended todos and deadline-based reminders.
-Return ONLY a JSON object with three keys:
-  "num": the [#] number of the single highest-priority item
-  "type": "todo" or "reminder"
+    system = """You are a productivity coach.
+Return ONLY a JSON object with two keys:
+  "num": the [#] number of the single highest-priority todo
   "reason": one sentence explaining why, with no markdown formatting.
-Treat overdue and imminent reminders (≤3 days) as highest urgency.
-Factor in how long todos have been pending too."""
+Factor in how long todos have been pending."""
 
     raw = await ask_claude("\n".join(lines) + "\n\nWhat should I tackle first and why?", system)
     match = re.search(r'\{.*?\}', raw, re.DOTALL)
@@ -163,11 +153,7 @@ Factor in how long todos have been pending too."""
             parsed = json.loads(match.group())
             num = int(parsed["num"])
             reason = parsed["reason"].replace("**", "")
-            if parsed.get("type") == "reminder":
-                item_text = sorted(reminders, key=lambda r: r["due_date"])[num - 1]["text"]
-            else:
-                item_text = tasks[num - 1]["text"]
-            return f"[{num}] {item_text}: {reason}"
+            return f"[{num}] {tasks[num - 1]['text']}: {reason}"
         except (KeyError, IndexError, ValueError, json.JSONDecodeError):
             pass
     return raw.replace("**", "")
@@ -200,9 +186,9 @@ async def cmd_todos():
             print(f"         {r['due_date']}{urgency_label(left)}")
 
     # ── Priority recommendation ────────────────────────────────────────────────
-    if tasks or reminders:
+    if tasks:
         print("\n🎯  Priority Recommendation\n")
-        rec = await get_priority_recommendation(tasks, reminders)
+        rec = await get_priority_recommendation(tasks)
         print(f"   {rec}")
 
     # ── Complete todos ─────────────────────────────────────────────────────────
