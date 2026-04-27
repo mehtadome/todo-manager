@@ -278,9 +278,12 @@ def cmd_complete_reminder(args: list[str]):
     log = load_log()
     now = datetime.now().isoformat()
 
+    sorted_reminders = sorted(data["reminders"], key=lambda r: r["due_date"])
+    selected = {sorted_reminders[i - 1]["id"] for i in ids if i <= len(sorted_reminders)}
+
     done, remaining = [], []
     for r in data["reminders"]:
-        if r["id"] in ids:
+        if r["id"] in selected:
             left = days_until(r["due_date"])
             log["completed"].append({
                 "id": r["id"], "text": r["text"], "due_date": r["due_date"],
@@ -337,8 +340,8 @@ def cmd_complete(args: list[str]):
     now = datetime.now().isoformat()
 
     done, remaining = [], []
-    for task in data["tasks"]:
-        if task["id"] in ids:
+    for i, task in enumerate(data["tasks"], 1):
+        if i in ids:
             days = days_pending(task["created_at"])
             log["completed"].append({
                 "id": task["id"], "text": task["text"],
@@ -350,7 +353,7 @@ def cmd_complete(args: list[str]):
             remaining.append(task)
 
     if not done:
-        print("No matching task IDs found. Use `list` to see IDs.")
+        print("No matching task IDs found. Use `list` to see current numbers.")
         return
 
     data["tasks"] = remaining
