@@ -116,11 +116,12 @@ This means Claude is called at most once per login session under normal use, and
 |------|---------|
 | `setup.sh` | One-time setup: venv, dependencies, data files, LaunchAgent |
 | `todo_manager.py` | Main CLI script |
-| `todo_remind.sh` | Opens a Terminal window at login |
-| `todo_checkin.sh` | Opens a Terminal window for an evening check-in |
+| `scripts/todo_remind.sh` | Opens a Terminal window at login |
+| `scripts/todo_checkin.sh` | Opens a Terminal window for an evening check-in |
 | `.venv/` | Python virtual environment (created by setup) |
-| `todos.json` | Live task list (created by setup) |
-| `reminders.json` | Active reminders (created by setup) |
-| `completed_log.json` | Completion history (created by setup) |
-| `.last_run` | Tracks the last date the login reminder fired (created by setup) |
-| `priority_cache.json` | Cached priority recommendation with the todo IDs it was based on |
+| `assets/todos.json` | Live task list (created by setup) |
+| `assets/reminders.json` | Active reminders (created by setup) |
+| `assets/completed_log.json` | Completion history (created by setup) |
+| `assets/priority_cache.json` | Cached priority recommendation with the todo IDs it was based on |
+| `assets/todo_cron.log` | Cron output log |
+| `assets/.last_reminded` | Tracks the last date the login reminder fired (created by setup) |

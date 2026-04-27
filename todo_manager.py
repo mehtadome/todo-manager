@@ -15,10 +15,11 @@ from pathlib import Path
 from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
 
 SCRIPT_DIR = Path(__file__).parent
-TODOS_FILE = SCRIPT_DIR / "todos.json"
-REMINDERS_FILE = SCRIPT_DIR / "reminders.json"
-COMPLETED_LOG_FILE = SCRIPT_DIR / "completed_log.json"
-PRIORITY_CACHE_FILE = SCRIPT_DIR / "priority_cache.json"
+ASSETS_DIR = SCRIPT_DIR / "assets"
+TODOS_FILE = ASSETS_DIR / "todos.json"
+REMINDERS_FILE = ASSETS_DIR / "reminders.json"
+COMPLETED_LOG_FILE = ASSETS_DIR / "completed_log.json"
+PRIORITY_CACHE_FILE = ASSETS_DIR / "priority_cache.json"
 
 # ─── Data helpers ────────────────────────────────────────────────────────────
 
@@ -376,6 +377,31 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
             print(f"\n✓ {len(parsed_list)} reminder(s) saved.")
         else:
             print("Couldn't extract any reminders — try: \"dentist tomorrow at 2pm\"")
+
+    # ── Final summary ──────────────────────────────────────────────────────────
+    final_tasks = load_todos()["tasks"]
+    final_reminders = load_reminders()["reminders"]
+
+    print("\n" + "─" * 48)
+
+    if final_tasks:
+        print(f"\n━━━  📋  TODOS  ({len(final_tasks)} pending)  ━━━\n")
+        for i, task in enumerate(final_tasks, 1):
+            age = days_pending(task["created_at"])
+            age_str = "today" if age == 0 else f"{age}d"
+            flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
+            print(f"  [{i}]  {task['text']}")
+            print(f"         pending {age_str}{flag}")
+    else:
+        print("\n━━━  📋  TODOS  ━━━\n")
+        print("  No pending todos.")
+
+    if final_reminders:
+        print(f"\n━━━  🔔  REMINDERS  ({len(final_reminders)} active)  ━━━\n")
+        for i, r in enumerate(sorted(final_reminders, key=lambda r: r["due_date"]), 1):
+            left = days_until(r["due_date"])
+            print(f"  [{i}]  {r['text']}")
+            print(f"         {r['due_date']}{urgency_label(left)}")
 
     print()
 
