@@ -16,6 +16,6 @@ echo "$TODAY" > "$LAST_RUN_FILE"
 osascript <<EOF
 tell application "Terminal"
     activate
-    do script "echo ''; echo '☀️  Daily Todo Reminder'; \"$PYTHON\" \"$SCRIPT\" todos"
+    do script "echo ''; echo '☀️  Daily Todo Reminder'; \"$PYTHON\" \"$SCRIPT\" todos --morning"
 end tell
 EOF

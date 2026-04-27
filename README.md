@@ -76,7 +76,7 @@ Make sure **Terminal** is allowed to be controlled by scripts.
 
 ## How it works
 
-Every time you log in, a Terminal window opens automatically running `todos`. You can also trigger it manually at any time:
+Every time you log in, a Terminal window opens automatically running `todos --morning`. You can also trigger it manually at any time:
 
 ```bash
 .venv/bin/python3 todo_manager.py todos
@@ -85,7 +85,7 @@ Every time you log in, a Terminal window opens automatically running `todos`. Yo
 The session shows:
 - All pending todos with age indicators
 - Any active reminders with due-date urgency (display only)
-- Claude's priority recommendation
+- Claude's priority recommendation (see caching behavior below)
 - A prompt to mark todos done by number
 - A free-text prompt to add new todos
 
@@ -94,6 +94,19 @@ Numbers displayed next to todos reset to `[1]` each session — always use what 
 Age indicators:
 - `📌` — pending 3+ days
 - `⚠️ overdue!` — pending 7+ days
+
+### Priority recommendation caching
+
+Claude is only called for a priority recommendation in specific circumstances. The result is written to `priority_cache.json` and reused across invocations — effectively a file-backed in-memory cache that persists between runs.
+
+| Invocation | Behavior |
+|---|---|
+| Login (automatic, `--morning`) | Always infers if todos exist; clean skip message if none |
+| `todos` (manual) | Reuses cached recommendation |
+| `todos --messages` | Forces re-inference regardless of cache |
+| `todos` after new todos added | Detects new todo IDs not present in the cache — re-infers automatically |
+
+This means Claude is called at most once per login session under normal use, and never wastefully on repeated manual runs.
 
 ---
 
@@ -110,3 +123,4 @@ Age indicators:
 | `reminders.json` | Active reminders (created by setup) |
 | `completed_log.json` | Completion history (created by setup) |
 | `.last_run` | Tracks the last date the login reminder fired (created by setup) |
+| `priority_cache.json` | Cached priority recommendation with the todo IDs it was based on |

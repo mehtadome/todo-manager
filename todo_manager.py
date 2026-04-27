@@ -18,6 +18,7 @@ SCRIPT_DIR = Path(__file__).parent
 TODOS_FILE = SCRIPT_DIR / "todos.json"
 REMINDERS_FILE = SCRIPT_DIR / "reminders.json"
 COMPLETED_LOG_FILE = SCRIPT_DIR / "completed_log.json"
+PRIORITY_CACHE_FILE = SCRIPT_DIR / "priority_cache.json"
 
 # ─── Data helpers ────────────────────────────────────────────────────────────
 
@@ -42,6 +43,20 @@ def load_log():
         with open(COMPLETED_LOG_FILE) as f:
             return json.load(f)
     return {"completed": []}
+
+def load_priority_cache() -> dict | None:
+    if PRIORITY_CACHE_FILE.exists():
+        with open(PRIORITY_CACHE_FILE) as f:
+            return json.load(f)
+    return None
+
+def save_priority_cache(recommendation: str, todo_ids: list[int]):
+    with open(PRIORITY_CACHE_FILE, "w") as f:
+        json.dump({
+            "recommendation": recommendation,
+            "cached_at": datetime.now().isoformat(),
+            "todo_ids": todo_ids,
+        }, f, indent=2)
 
 def save_log(data):
     with open(COMPLETED_LOG_FILE, "w") as f:
@@ -190,7 +205,7 @@ Factor in how long todos have been pending."""
 
 # ─── Command ──────────────────────────────────────────────────────────────────
 
-async def cmd_todos():
+async def cmd_todos(morning: bool = False, force_refresh: bool = False):
     tasks = load_todos()["tasks"]
     reminders = load_reminders()["reminders"]
 
@@ -206,6 +221,8 @@ async def cmd_todos():
     else:
         print("\n━━━  📋  TODOS  ━━━\n")
         print("  No pending todos.")
+        if morning:
+            print("  (No todos to prioritize — skipping inference.)")
 
     # ── Reminders (display only) ───────────────────────────────────────────────
     if reminders:
@@ -217,8 +234,19 @@ async def cmd_todos():
 
     # ── Priority recommendation ────────────────────────────────────────────────
     if tasks:
+        current_ids = [t["id"] for t in tasks]
+        cache = load_priority_cache()
+        cached_ids = cache.get("todo_ids", []) if cache else []
+        has_new_todos = any(tid not in cached_ids for tid in current_ids)
+
+        needs_inference = morning or force_refresh or cache is None or has_new_todos
+
         print("\n🎯  Priority Recommendation\n")
-        rec = await get_priority_recommendation(tasks)
+        if needs_inference:
+            rec = await get_priority_recommendation(tasks)
+            save_priority_cache(rec, current_ids)
+        else:
+            rec = cache["recommendation"]
         print(f"   {rec}")
 
     # ── Complete todos ─────────────────────────────────────────────────────────
@@ -316,10 +344,16 @@ async def cmd_todos():
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 async def main():
-    if len(sys.argv) > 1 and sys.argv[1].lower() != "todos":
-        print(f"Unknown command: '{sys.argv[1]}'. Only 'todos' is supported.")
+    args = sys.argv[1:]
+    morning = "--morning" in args
+    force_refresh = "--messages" in args
+    positional = [a for a in args if not a.startswith("--")]
+
+    if positional and positional[0].lower() != "todos":
+        print(f"Unknown command: '{positional[0]}'. Only 'todos' is supported.")
         sys.exit(1)
-    await cmd_todos()
+
+    await cmd_todos(morning=morning, force_refresh=force_refresh)
 
 if __name__ == "__main__":
     try:
