@@ -292,7 +292,7 @@ def cmd_complete_reminder(args: list[str]):
 def _print_reminders(reminders: list[dict]):
     for i, r in enumerate(sorted(reminders, key=lambda r: r["due_date"]), 1):
         left = days_until(r["due_date"])
-        print(f"  [{i:>2}]  {r['text']}")
+        print(f"  [{i}]  {r['text']}")
         print(f"         due {r['due_date']}{urgency_label(left)}")
 
 def cmd_list_reminders():
