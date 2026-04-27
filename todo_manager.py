@@ -172,21 +172,23 @@ async def get_priority_recommendation(tasks: list[dict], reminders: list[dict]) 
     lines = []
     if tasks:
         lines.append("TODOS (no fixed deadline):")
-        for i, t in enumerate(tasks):
-            lines.append(f"  {i+1}. [ID {t['id']}] {t['text']} — pending {days_pending(t['created_at'])} day(s)")
+        for i, t in enumerate(tasks, 1):
+            lines.append(f"  [{i}] {t['text']} — pending {days_pending(t['created_at'])} day(s)")
     if reminders:
         lines.append("\nREMINDERS (deadline-based):")
-        for i, r in enumerate(reminders):
+        for i, r in enumerate(reminders, 1):
             left = days_until(r["due_date"])
             status = f"OVERDUE by {abs(left)}d" if left < 0 else (f"due in {left}d" if left > 0 else "DUE TODAY")
-            lines.append(f"  {i+1}. [ID {r['id']}] {r['text']} — {status} (due {r['due_date']})")
+            lines.append(f"  [{i}] {r['text']} — {status} (due {r['due_date']})")
 
     system = """You are a productivity coach. The user has both open-ended todos and deadline-based reminders.
 Give a direct, actionable priority recommendation in exactly one sentence.
+Reference items by their [#] number shown in the list.
 Treat overdue and imminent reminders (≤3 days) as highest urgency — call them out explicitly.
-Factor in how long todos have been pending too."""
+Factor in how long todos have been pending too.
+Do not use markdown formatting."""
 
-    return await ask_claude("\n".join(lines) + "\n\nWhat should I tackle first and why?", system)
+    return (await ask_claude("\n".join(lines) + "\n\nWhat should I tackle first and why?", system)).replace("**", "")
 
 # ─── Commands ─────────────────────────────────────────────────────────────────
 
@@ -357,7 +359,7 @@ async def cmd_todos():
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
             flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i:>2}]  {task['text']}")
+            print(f"  [{i}]  {task['text']}")
             print(f"         pending {age_str}{flag}")
     else:
         print("\n━━━  📋  TODOS  ━━━\n")
@@ -427,7 +429,7 @@ async def cmd_list(silent=False) -> list[dict]:
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
             flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i:>2}]  {task['text']}")
+            print(f"  [{i}]  {task['text']}")
             print(f"         pending {age_str}{flag}")
 
         reminders = load_reminders()["reminders"]
@@ -464,7 +466,7 @@ async def cmd_remind():
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
             flag = "  ⚠️" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i:>2}]  {task['text']}  ({age_str}){flag}")
+            print(f"  [{i}]  {task['text']}  ({age_str}){flag}")
 
     if reminders:
         print(f"\n🔔  Reminders\n")
