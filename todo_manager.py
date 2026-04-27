@@ -77,8 +77,10 @@ def multiline_input(prompt: str) -> str:
     while True:
         try:
             line = input()
-        except (EOFError, KeyboardInterrupt):
+        except EOFError:
             break
+        except KeyboardInterrupt:
+            raise
         if line == "" and lines and lines[-1] == "":
             break
         lines.append(line)
@@ -232,7 +234,10 @@ async def cmd_todos():
 
     # ── Add new todos ──────────────────────────────────────────────────────────
     print("\n─── Anything else to add? ───")
-    new_todos = multiline_input("Rant freely — press Enter twice when done, or just Enter twice to skip:\n")
+    try:
+        new_todos = multiline_input("Rant freely — press Enter twice when done, or just Enter twice to skip:\n")
+    except KeyboardInterrupt:
+        print(); return
     if new_todos:
         print("\nProcessing...", flush=True)
         new_tasks = await summarize_input(new_todos)
@@ -259,4 +264,8 @@ async def main():
     await cmd_todos()
 
 if __name__ == "__main__":
-    anyio.run(main)
+    try:
+        anyio.run(main)
+    except KeyboardInterrupt:
+        print()
+        sys.exit(0)
