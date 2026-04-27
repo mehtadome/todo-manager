@@ -61,16 +61,16 @@ def days_until(due_date_str: str) -> int:
 
 def urgency_label(days_left: int) -> str:
     if days_left < 0:
-        return f"  🔴  OVERDUE by {abs(days_left)}d"
+        return f", 🔴 OVERDUE by {abs(days_left)}d"
     if days_left == 0:
-        return "  🚨  DUE TODAY"
+        return ", 🚨 DUE TODAY"
     if days_left == 1:
-        return "  🚨  due tomorrow"
+        return ", 🚨 due tomorrow"
     if days_left <= 3:
-        return f"  ⚠️   due in {days_left}d"
+        return f", ⚠️ due in {days_left}d"
     if days_left <= 7:
-        return f"  📌  due in {days_left}d"
-    return f"  due in {days_left}d"
+        return f", 📌 due in {days_left}d"
+    return f", due in {days_left}d"
 
 # ─── Input helper ─────────────────────────────────────────────────────────────
 
@@ -293,7 +293,7 @@ def _print_reminders(reminders: list[dict]):
     for i, r in enumerate(sorted(reminders, key=lambda r: r["due_date"]), 1):
         left = days_until(r["due_date"])
         print(f"  [{i}]  {r['text']}")
-        print(f"         due {r['due_date']}{urgency_label(left)}")
+        print(f"         {r['due_date']}{urgency_label(left)}")
 
 def cmd_list_reminders():
     data = load_reminders()
