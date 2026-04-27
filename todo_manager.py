@@ -137,6 +137,34 @@ Example output:
         if line.strip() and line.strip() not in ('[', ']')
     ]
 
+async def parse_reminder(raw_text: str) -> dict | None:
+    today = date.today().isoformat()
+    system = f"""You are a reminder parser. Today's date is {today}.
+
+The user will describe something they need to do by a certain date. Extract:
+1. A clear, concise task description
+2. The due date in YYYY-MM-DD format
+
+Return ONLY a JSON object with keys "text" and "due_date". No preamble, no markdown.
+
+Examples:
+Input: "need to submit my tax return by april 15th"
+Output: {{"text": "Submit tax return", "due_date": "2026-04-15"}}
+
+Input: "remind me to renew my car registration, it expires end of this month"
+Output: {{"text": "Renew car registration", "due_date": "2026-04-30"}}"""
+
+    text = await ask_claude(raw_text, system)
+    match = re.search(r'\{.*?\}', text, re.DOTALL)
+    if match:
+        try:
+            parsed = json.loads(match.group())
+            if "text" in parsed and "due_date" in parsed:
+                return parsed
+        except json.JSONDecodeError:
+            pass
+    return None
+
 async def get_priority_recommendation(tasks: list[dict]) -> str:
     lines = ["TODOS:"]
     for i, t in enumerate(tasks, 1):
@@ -233,7 +261,7 @@ async def cmd_todos():
                     print(f"   ✓  {task['text']}  ({duration})")
 
     # ── Add new todos ──────────────────────────────────────────────────────────
-    print("\n─── Anything else to add? ───")
+    print("\n─── New todos? (reminders will be asked next) ───")
     try:
         new_todos = multiline_input("Rant freely — press Enter twice when done, or just Enter twice to skip:\n")
     except KeyboardInterrupt:
@@ -252,6 +280,36 @@ async def cmd_todos():
                 print(f"  {i}. {task_text}")
             save_todos(data)
             print(f"\n✓ {len(new_tasks)} task(s) added.")
+
+    # ── Add new reminders ──────────────────────────────────────────────────────
+    print("\n─── New reminders? ───")
+    try:
+        new_reminder = multiline_input("Describe what and by when — press Enter twice when done, or just Enter twice to skip:\n")
+    except KeyboardInterrupt:
+        print(); return
+    if new_reminder:
+        print("\nProcessing...", flush=True)
+        parsed = await parse_reminder(new_reminder)
+        if parsed:
+            data = load_reminders()
+            if "next_id" not in data:
+                data["next_id"] = len(data["reminders"]) + 1
+            reminder = {
+                "id": data["next_id"],
+                "text": parsed["text"],
+                "due_date": parsed["due_date"],
+                "created_at": datetime.now().isoformat()
+            }
+            data["reminders"].append(reminder)
+            data["next_id"] += 1
+            with open(REMINDERS_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+            left = days_until(parsed["due_date"])
+            print(f"\n  🔔  {parsed['text']}")
+            print(f"       {parsed['due_date']}{urgency_label(left)}")
+            print("\n✓ Reminder saved.")
+        else:
+            print("Couldn't extract a task and date — try: \"submit report by April 10th\"")
 
     print()
 
