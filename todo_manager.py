@@ -79,10 +79,29 @@ def urgency_label(days_left: int) -> str:
     if days_left == 1:
         return ", 🚨 due tomorrow"
     if days_left <= 3:
-        return f", ⚠️ due in {days_left}d"
+        return f", !! due in {days_left}d"
     if days_left <= 7:
         return f", 📌 due in {days_left}d"
     return f", due in {days_left}d"
+
+def format_due_date(due_date_str: str, due_time_str: str = None) -> str:
+    due = date.fromisoformat(due_date_str)
+    if due.year == date.today().year:
+        formatted = due.strftime("%B %-d")
+    else:
+        formatted = due.strftime("%B %-d, %Y")
+    if due_time_str:
+        formatted += f" at {due_time_str}"
+    return formatted
+
+def reminder_sort_key(r: dict):
+    t = r.get("due_time")
+    if t:
+        try:
+            return datetime.strptime(f"{r['due_date']} {t}", "%Y-%m-%d %I:%M %p")
+        except ValueError:
+            pass
+    return datetime.fromisoformat(r["due_date"] + "T23:59:59")
 
 # ─── Input helper ─────────────────────────────────────────────────────────────
 
@@ -157,14 +176,19 @@ async def parse_reminders(raw_text: str) -> list[dict]:
     today = date.today().isoformat()
     system = f"""You are a reminder parser. Today's date is {today}.
 
-The user will describe one or more things they need to do by certain dates. Extract each one and return ONLY a valid JSON array of objects, each with keys "text" and "due_date" (YYYY-MM-DD). No preamble, no markdown.
+The user will describe one or more things they need to do by certain dates and optionally times. Extract each one and return ONLY a valid JSON array of objects with:
+  "text": clear task description
+  "due_date": YYYY-MM-DD
+  "due_time": time in "H:MM AM/PM" format — omit this key entirely if no time was mentioned
+
+No preamble, no markdown.
 
 Examples:
-Input: "need to submit my tax return by april 15th"
-Output: [{{"text": "Submit tax return", "due_date": "2026-04-15"}}]
-
 Input: "dentist thursday at 2pm, renew car registration end of month"
-Output: [{{"text": "Dentist appointment", "due_date": "2026-04-30"}}, {{"text": "Renew car registration", "due_date": "2026-04-30"}}]"""
+Output: [{{"text": "Dentist appointment", "due_date": "2026-04-30", "due_time": "2:00 PM"}}, {{"text": "Renew car registration", "due_date": "2026-04-30"}}]
+
+Input: "submit tax return by april 15th"
+Output: [{{"text": "Submit tax return", "due_date": "2026-04-15"}}]"""
 
     text = await ask_claude(raw_text, system)
     match = re.search(r'\[.*?\]', text, re.DOTALL)
@@ -201,7 +225,7 @@ Factor in how long todos have been pending."""
 
 # ─── Command ──────────────────────────────────────────────────────────────────
 
-async def cmd_todos(morning: bool = False, force_refresh: bool = False):
+async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme: bool = False):
     tasks = load_todos()["tasks"]
     reminders = load_reminders()["reminders"]
 
@@ -211,7 +235,7 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
         for i, task in enumerate(tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
-            flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
+            flag = "  !!  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
             print(f"  [{i}]  {task['text']}")
             print(f"         pending {age_str}{flag}")
     else:
@@ -223,10 +247,15 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
     # ── Reminders (display only) ───────────────────────────────────────────────
     if reminders:
         print(f"\n━━━  🔔  REMINDERS  ({len(reminders)} active)  ━━━\n")
-        for i, r in enumerate(sorted(reminders, key=lambda r: r["due_date"]), 1):
+        for i, r in enumerate(sorted(reminders, key=reminder_sort_key), 1):
             left = days_until(r["due_date"])
+            due_str = format_due_date(r["due_date"], r.get("due_time"))
             print(f"  [{i}]  {r['text']}")
-            print(f"         {r['due_date']}{urgency_label(left)}")
+            print(f"         {due_str}{urgency_label(left)}")
+
+    if remindme:
+        print()
+        return
 
     # ── Priority recommendation ────────────────────────────────────────────────
     if tasks:
@@ -299,7 +328,7 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
                 print("Invalid input — enter space-separated numbers.")
                 return
 
-            sorted_reminders = sorted(reminders, key=lambda r: r["due_date"])
+            sorted_reminders = sorted(reminders, key=reminder_sort_key)
             data = load_reminders()
             log = load_log()
             now = datetime.now().isoformat()
@@ -367,11 +396,14 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
                     "due_date": parsed["due_date"],
                     "created_at": now,
                 }
+                if "due_time" in parsed:
+                    reminder["due_time"] = parsed["due_time"]
                 data["reminders"].append(reminder)
                 data["next_id"] += 1
                 left = days_until(parsed["due_date"])
+                due_str = format_due_date(parsed["due_date"], parsed.get("due_time"))
                 print(f"  🔔  {parsed['text']}")
-                print(f"       {parsed['due_date']}{urgency_label(left)}")
+                print(f"       {due_str}{urgency_label(left)}")
             with open(REMINDERS_FILE, "w") as f:
                 json.dump(data, f, indent=2)
             print(f"\n✓ {len(parsed_list)} reminder(s) saved.")
@@ -389,7 +421,7 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
         for i, task in enumerate(final_tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
-            flag = "  ⚠️  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
+            flag = "  !!  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
             print(f"  [{i}]  {task['text']}")
             print(f"         pending {age_str}{flag}")
     else:
@@ -398,10 +430,11 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False):
 
     if final_reminders:
         print(f"\n━━━  🔔  REMINDERS  ({len(final_reminders)} active)  ━━━\n")
-        for i, r in enumerate(sorted(final_reminders, key=lambda r: r["due_date"]), 1):
+        for i, r in enumerate(sorted(final_reminders, key=reminder_sort_key), 1):
             left = days_until(r["due_date"])
+            due_str = format_due_date(r["due_date"], r.get("due_time"))
             print(f"  [{i}]  {r['text']}")
-            print(f"         {r['due_date']}{urgency_label(left)}")
+            print(f"         {due_str}{urgency_label(left)}")
 
     print()
 
@@ -411,13 +444,14 @@ async def main():
     args = sys.argv[1:]
     morning = "--morning" in args
     force_refresh = "--messages" in args
+    remindme = "--remindme" in args
     positional = [a for a in args if not a.startswith("--")]
 
     if positional and positional[0].lower() != "todos":
         print(f"Unknown command: '{positional[0]}'. Only 'todos' is supported.")
         sys.exit(1)
 
-    await cmd_todos(morning=morning, force_refresh=force_refresh)
+    await cmd_todos(morning=morning, force_refresh=force_refresh, remindme=remindme)
 
 if __name__ == "__main__":
     try:
