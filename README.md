@@ -62,6 +62,8 @@ launchctl list | grep todo-manager
 
 > **If you move the folder**, just re-run `bash setup.sh` from the new location. It will re-register the LaunchAgent with the updated path.
 
+> **Side effect — Script Editor opening at login:** If the LaunchAgent plist points to a `.sh` file that no longer exists (e.g. after moving the folder without re-running setup), macOS may open Script Editor at login instead of Terminal. This happens because Launch Services falls back to opening the missing file by its `.sh` association. Fix it by re-running `bash setup.sh`, or remove the plist manually: `rm ~/Library/LaunchAgents/com.<user>.todo-manager.plist`.
+
 ### 3. Grant macOS permissions
 
 The launcher uses AppleScript to open a Terminal window. On first run, macOS will prompt you to allow this. Click **Allow** when asked.

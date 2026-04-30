@@ -172,7 +172,7 @@ Example output:
         if line.strip() and line.strip() not in ('[', ']')
     ]
 
-async def parse_reminders(raw_text: str) -> list[dict]:
+async def parse_reminders(raw_text: str) -> list[dict] | None:
     today = date.today().isoformat()
     system = f"""You are a reminder parser. Today's date is {today}.
 
@@ -191,6 +191,8 @@ Input: "submit tax return by april 15th"
 Output: [{{"text": "Submit tax return", "due_date": "2026-04-15"}}]"""
 
     text = await ask_claude(raw_text, system)
+    if not text:
+        return None
     match = re.search(r'\[.*?\]', text, re.DOTALL)
     if match:
         try:
@@ -225,7 +227,46 @@ Factor in how long todos have been pending."""
 
 # ─── Command ──────────────────────────────────────────────────────────────────
 
-async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme: bool = False):
+async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme: bool = False, add_todos: list[str] | None = None, add_reminders: list[dict] | None = None):
+    if add_reminders:
+        data = load_reminders()
+        if "next_id" not in data:
+            data["next_id"] = len(data["reminders"]) + 1
+        now = datetime.now().isoformat()
+        for parsed in add_reminders:
+            reminder = {
+                "id": data["next_id"],
+                "text": parsed["text"],
+                "due_date": parsed["due_date"],
+                "created_at": now,
+            }
+            if "due_time" in parsed:
+                reminder["due_time"] = parsed["due_time"]
+            data["reminders"].append(reminder)
+            data["next_id"] += 1
+        with open(REMINDERS_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        print(f"\n✓ {len(add_reminders)} reminder(s) added:")
+        for parsed in add_reminders:
+            due_str = format_due_date(parsed["due_date"], parsed.get("due_time"))
+            print(f"   • {parsed['text']}  ({due_str})")
+        print()
+        remindme = True
+
+    if add_todos:
+        data = load_todos()
+        now = datetime.now().isoformat()
+        for text in add_todos:
+            task = {"id": data["next_id"], "text": text, "created_at": now}
+            data["tasks"].append(task)
+            data["next_id"] += 1
+        save_todos(data)
+        print(f"\n✓ {len(add_todos)} todo(s) added:")
+        for text in add_todos:
+            print(f"   • {text}")
+        print()
+        remindme = True
+
     tasks = load_todos()["tasks"]
     reminders = load_reminders()["reminders"]
 
@@ -407,8 +448,10 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
             with open(REMINDERS_FILE, "w") as f:
                 json.dump(data, f, indent=2)
             print(f"\n✓ {len(parsed_list)} reminder(s) saved.")
+        elif parsed_list is None:
+            print("Couldn't reach Claude — please try again.")
         else:
-            print("Couldn't extract any reminders — try: \"dentist tomorrow at 2pm\"")
+            print("Couldn't parse a reminder from that — try: \"dentist tomorrow at 2pm\"")
 
     # ── Final summary ──────────────────────────────────────────────────────────
     final_tasks = load_todos()["tasks"]
@@ -451,7 +494,40 @@ async def main():
         print(f"Unknown command: '{positional[0]}'. Only 'todos' is supported.")
         sys.exit(1)
 
-    await cmd_todos(morning=morning, force_refresh=force_refresh, remindme=remindme)
+    add_todos = None
+    if "--add-todo" in args:
+        idx = args.index("--add-todo")
+        if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+            add_todos = [args[idx + 1]]
+        else:
+            raw = multiline_input("Enter todos — press Enter twice when done:\n")
+            if raw:
+                print("\nProcessing...", flush=True)
+                add_todos = await summarize_input(raw)
+            else:
+                add_todos = []
+
+    add_reminders = None
+    if "--add-reminder" in args:
+        idx = args.index("--add-reminder")
+        if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+            raw = args[idx + 1]
+        else:
+            raw = multiline_input("Describe what and by when — press Enter twice when done:\n")
+        if raw:
+            print("\nProcessing...", flush=True)
+            parsed = await parse_reminders(raw)
+            if parsed is None:
+                print("Couldn't reach Claude — please try again.")
+                sys.exit(1)
+            elif not parsed:
+                print("Couldn't parse a reminder from that — try: \"dentist tomorrow at 2pm\"")
+                sys.exit(1)
+            add_reminders = parsed
+        else:
+            add_reminders = []
+
+    await cmd_todos(morning=morning, force_refresh=force_refresh, remindme=remindme, add_todos=add_todos, add_reminders=add_reminders)
 
 if __name__ == "__main__":
     try:

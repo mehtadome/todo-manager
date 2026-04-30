@@ -31,6 +31,11 @@ The LaunchAgent (`~/Library/LaunchAgents/com.<user>.todo-manager.plist`) calls `
 
 **No tests, no linter config** — the project has no test suite or formatting toolchain.
 
+## Known side effects
+
+- **Script Editor opens at login**: If the LaunchAgent plist points to a `.sh` file that no longer exists (e.g. after moving the repo without re-running `setup.sh`), macOS Launch Services may open Script Editor at login via `.sh` file association. Fix by re-running `bash setup.sh`, or remove the plist with `launchctl unload` + `rm`.
+- **"You have mail" at terminal open**: macOS delivers stderr from failed LaunchAgent runs to the local mailbox. A broken plist path causes this to accumulate. Removing or fixing the plist stops new mail; existing mail can be cleared with the `mail` command.
+
 ## Key constraints
 
 - `scripts/todo_remind.sh` and `scripts/todo_checkin.sh` have the repo path hard-coded. Re-run `bash setup.sh` after moving the folder to regenerate the LaunchAgent plist with the new path. The shell scripts themselves still need their `DIR` variable updated manually.
