@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Versioning
+
+Each merged PR increments the minor version. Current version: **v1.0** (PR #4).
+
+| Version | PR |
+|---|---|
+| v1.0 | [#4 — reminders overhaul, quick-add flags, side effect docs](https://github.com/mehtadome/todo-manager/pull/4) |
+| v1.1 | [#5 — color-dot priority system](https://github.com/mehtadome/todo-manager/pull/5) |
+
+When creating a new PR, add a row to this table with the next version (v1.1, v1.2, …). When the version reaches **v1.9**, flag it to the user before proceeding — that's the signal to discuss whether to cut a v2.0.
+
 ## Running the app
 
 All commands use the venv Python, run from the repo root:

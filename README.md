@@ -4,7 +4,7 @@ An AI-powered local task manager for macOS. Describe what you need to do in plai
 
 > **No API key needed.** This runs through your Claude Pro or Claude Code subscription.
 
-> **v1.0 is out.** Reminders overhaul, quick-add flags, and side effect fixes — see the [changelog](https://github.com/mehtadome/todo-manager/pull/4).
+> **v1.1 is out.** Color-dot priority system — see the [changelog](https://github.com/mehtadome/todo-manager/pull/5).
 
 ---
 

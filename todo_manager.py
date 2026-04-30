@@ -71,18 +71,36 @@ def days_until(due_date_str: str) -> int:
     due = date.fromisoformat(due_date_str)
     return (due - date.today()).days
 
-def urgency_label(days_left: int) -> str:
+def priority_dot(days_left: int) -> str:
+    """⚪ far off · 🟢 coming soon · 🟡 day-of or recently overdue · 🔴 past overdue"""
+    if days_left >= 8:
+        return "⚪"
+    if days_left >= 2:
+        return "🟢"
+    if days_left >= -2:
+        return "🟡"
+    return "🔴"
+
+def todo_dot(age: int) -> str:
+    """⚪ new · 🟢 a few days old · 🟡 been sitting · 🔴 very stale"""
+    if age <= 2:
+        return "⚪"
+    if age <= 6:
+        return "🟢"
+    if age <= 13:
+        return "🟡"
+    return "🔴"
+
+def urgency_text(days_left: int) -> str:
     if days_left < 0:
-        return f", 🔴 OVERDUE by {abs(days_left)}d"
+        return f" — {abs(days_left)}d overdue"
     if days_left == 0:
-        return ", 🚨 DUE TODAY"
+        return " — due today"
     if days_left == 1:
-        return ", 🚨 due tomorrow"
-    if days_left <= 3:
-        return f", !! due in {days_left}d"
+        return " — due tomorrow"
     if days_left <= 7:
-        return f", 📌 due in {days_left}d"
-    return f", due in {days_left}d"
+        return f" — due in {days_left}d"
+    return ""
 
 def format_due_date(due_date_str: str, due_time_str: str = None) -> str:
     due = date.fromisoformat(due_date_str)
@@ -276,9 +294,9 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
         for i, task in enumerate(tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
-            flag = "  !!  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i}]  {task['text']}")
-            print(f"         pending {age_str}{flag}")
+            dot = todo_dot(age)
+            print(f"  {dot}  [{i}]  {task['text']}")
+            print(f"           pending {age_str}")
     else:
         print("\n━━━  📋  TODOS  ━━━\n")
         print("  No pending todos.")
@@ -291,8 +309,9 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
         for i, r in enumerate(sorted(reminders, key=reminder_sort_key), 1):
             left = days_until(r["due_date"])
             due_str = format_due_date(r["due_date"], r.get("due_time"))
-            print(f"  [{i}]  {r['text']}")
-            print(f"         {due_str}{urgency_label(left)}")
+            dot = priority_dot(left)
+            print(f"  {dot}  [{i}]  {r['text']}")
+            print(f"           {due_str}{urgency_text(left)}")
 
     if remindme:
         print()
@@ -443,8 +462,9 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
                 data["next_id"] += 1
                 left = days_until(parsed["due_date"])
                 due_str = format_due_date(parsed["due_date"], parsed.get("due_time"))
-                print(f"  🔔  {parsed['text']}")
-                print(f"       {due_str}{urgency_label(left)}")
+                dot = priority_dot(left)
+                print(f"  {dot}  {parsed['text']}")
+                print(f"       {due_str}{urgency_text(left)}")
             with open(REMINDERS_FILE, "w") as f:
                 json.dump(data, f, indent=2)
             print(f"\n✓ {len(parsed_list)} reminder(s) saved.")
@@ -464,9 +484,9 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
         for i, task in enumerate(final_tasks, 1):
             age = days_pending(task["created_at"])
             age_str = "today" if age == 0 else f"{age}d"
-            flag = "  !!  overdue!" if age >= 7 else ("  📌" if age >= 3 else "")
-            print(f"  [{i}]  {task['text']}")
-            print(f"         pending {age_str}{flag}")
+            dot = todo_dot(age)
+            print(f"  {dot}  [{i}]  {task['text']}")
+            print(f"           pending {age_str}")
     else:
         print("\n━━━  📋  TODOS  ━━━\n")
         print("  No pending todos.")
@@ -476,8 +496,9 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
         for i, r in enumerate(sorted(final_reminders, key=reminder_sort_key), 1):
             left = days_until(r["due_date"])
             due_str = format_due_date(r["due_date"], r.get("due_time"))
-            print(f"  [{i}]  {r['text']}")
-            print(f"         {due_str}{urgency_label(left)}")
+            dot = priority_dot(left)
+            print(f"  {dot}  [{i}]  {r['text']}")
+            print(f"           {due_str}{urgency_text(left)}")
 
     print()
 
