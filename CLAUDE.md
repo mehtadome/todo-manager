@@ -7,16 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All commands use the venv Python, run from the repo root:
 
 ```bash
-.venv/bin/python3 todo_manager.py todos          # all-in-one dashboard
-.venv/bin/python3 todo_manager.py add "..."      # add tasks from natural language
-.venv/bin/python3 todo_manager.py list           # view todos + AI priority recommendation
-.venv/bin/python3 todo_manager.py reminder "..." # add a deadline-based reminder
-.venv/bin/python3 todo_manager.py reminders      # view all reminders
-.venv/bin/python3 todo_manager.py complete 1,3   # mark todos done by ID
-.venv/bin/python3 todo_manager.py done-reminder 2
-.venv/bin/python3 todo_manager.py log            # view completion history
-.venv/bin/python3 todo_manager.py remind         # login reminder summary (non-interactive)
-.venv/bin/python3 todo_manager.py checkin        # evening check-in (interactive)
+.venv/bin/python3 todo_manager.py todos           # all-in-one interactive dashboard
+.venv/bin/python3 todo_manager.py todos --morning # morning mode: shows AI priority recommendation
+.venv/bin/python3 todo_manager.py todos --remindme # non-interactive reminder summary (used at login)
 ```
 
 ## Setup
@@ -33,10 +26,15 @@ The LaunchAgent (`~/Library/LaunchAgents/com.<user>.todo-manager.plist`) calls `
 
 - **Data layer**: `assets/todos.json`, `assets/reminders.json`, `assets/completed_log.json`, `assets/priority_cache.json` — plain JSON files stored in the `assets/` subdirectory. `load_*/save_*` helpers read/write them directly with no ORM.
 - **AI layer**: `ask_claude()` calls `claude_agent_sdk.query()` (uses Claude Code subscription, no API key). Three AI functions: `summarize_input` (NL → task list), `parse_reminders` (NL → list of `{text, due_date}`), `get_priority_recommendation` (todos → one-sentence priority pick). All return structured output parsed from Claude's response via `re.search`.
-- **Commands**: async commands (`todos`, `add`, `reminder`, `list`, `remind`, `checkin`) use `anyio.run(main)`. Sync commands (`reminders`, `complete`, `done-reminder`, `log`) run directly. Async and sync command tables are separate dicts in `main()`.
+- **Commands**: single entry point — `todos` — which runs an interactive session: displays current todos and reminders, offers to mark items done, then prompts for new todos and reminders. Optional flags: `--morning` (show AI priority recommendation), `--remindme` (non-interactive, used by the login LaunchAgent).
 - **Shell scripts**: `scripts/todo_remind.sh` (login, non-interactive) and `scripts/todo_checkin.sh` (evening, interactive) use AppleScript to open a Terminal window and run the appropriate command inside it.
 
 **No tests, no linter config** — the project has no test suite or formatting toolchain.
+
+## Known side effects
+
+- **Script Editor opens at login**: If the LaunchAgent plist points to a `.sh` file that no longer exists (e.g. after moving the repo without re-running `setup.sh`), macOS Launch Services may open Script Editor at login via `.sh` file association. Fix by re-running `bash setup.sh`, or remove the plist with `launchctl unload` + `rm`.
+- **"You have mail" at terminal open**: macOS delivers stderr from failed LaunchAgent runs to the local mailbox. A broken plist path causes this to accumulate. Removing or fixing the plist stops new mail; existing mail can be cleared with the `mail` command.
 
 ## Key constraints
 
