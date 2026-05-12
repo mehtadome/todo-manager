@@ -19,7 +19,6 @@ ASSETS_DIR = SCRIPT_DIR / "assets"
 TODOS_FILE = ASSETS_DIR / "todos.json"
 REMINDERS_FILE = ASSETS_DIR / "reminders.json"
 COMPLETED_LOG_FILE = ASSETS_DIR / "completed_log.json"
-PRIORITY_CACHE_FILE = ASSETS_DIR / "priority_cache.json"
 
 # ─── Data helpers ────────────────────────────────────────────────────────────
 
@@ -44,20 +43,6 @@ def load_log():
         with open(COMPLETED_LOG_FILE) as f:
             return json.load(f)
     return {"completed": []}
-
-def load_priority_cache() -> dict | None:
-    if PRIORITY_CACHE_FILE.exists():
-        with open(PRIORITY_CACHE_FILE) as f:
-            return json.load(f)
-    return None
-
-def save_priority_cache(recommendation: str, todo_ids: list[int]):
-    with open(PRIORITY_CACHE_FILE, "w") as f:
-        json.dump({
-            "recommendation": recommendation,
-            "cached_at": datetime.now().isoformat(),
-            "todo_ids": todo_ids,
-        }, f, indent=2)
 
 def save_log(data):
     with open(COMPLETED_LOG_FILE, "w") as f:
@@ -220,32 +205,36 @@ Output: [{{"text": "Submit tax return", "due_date": "2026-04-15"}}]"""
             pass
     return []
 
-async def get_priority_recommendation(tasks: list[dict]) -> str:
-    lines = ["TODOS:"]
-    for i, t in enumerate(tasks, 1):
-        lines.append(f"  [{i}] {t['text']} — pending {days_pending(t['created_at'])} day(s)")
+# ─── Complete-todo helper ─────────────────────────────────────────────────────
 
-    system = """You are a productivity coach.
-Return ONLY a JSON object with two keys:
-  "num": the [#] number of the single highest-priority todo
-  "reason": one sentence explaining why, with no markdown formatting.
-Factor in how long todos have been pending."""
-
-    raw = await ask_claude("\n".join(lines) + "\n\nWhat should I tackle first and why?", system)
-    match = re.search(r'\{.*?\}', raw, re.DOTALL)
-    if match:
-        try:
-            parsed = json.loads(match.group())
-            num = int(parsed["num"])
-            reason = parsed["reason"].replace("**", "")
-            return f"[{num}] {tasks[num - 1]['text']}: {reason}"
-        except (KeyError, IndexError, ValueError, json.JSONDecodeError):
-            pass
-    return raw.replace("**", "")
+def resolve_complete_specs(specs: list[str], tasks: list[dict]) -> set[int]:
+    """Return 1-based indices of tasks matched by #N, bare number, or text substring."""
+    indices = set()
+    for spec in specs:
+        spec = spec.strip()
+        if not spec:
+            continue
+        num_str = spec.lstrip("#")
+        if num_str.isdigit():
+            n = int(num_str)
+            if 1 <= n <= len(tasks):
+                indices.add(n)
+            else:
+                print(f"  No todo #{n}.")
+        else:
+            lower = spec.lower()
+            matched = [i for i, t in enumerate(tasks, 1) if lower in t["text"].lower()]
+            if not matched:
+                print(f"  No todo matching \"{spec}\".")
+            elif len(matched) > 1:
+                print(f"  \"{spec}\" matches {len(matched)} todos — be more specific.")
+            else:
+                indices.add(matched[0])
+    return indices
 
 # ─── Command ──────────────────────────────────────────────────────────────────
 
-async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme: bool = False, add_todos: list[str] | None = None, add_reminders: list[dict] | None = None):
+async def cmd_todos(remindme: bool = False, add_todos: list[str] | None = None, add_reminders: list[dict] | None = None, complete_todos: list[str] | None = None):
     if add_reminders:
         data = load_reminders()
         if "next_id" not in data:
@@ -285,6 +274,34 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
         print()
         remindme = True
 
+    if complete_todos is not None:
+        data = load_todos()
+        log = load_log()
+        now = datetime.now().isoformat()
+        indices = resolve_complete_specs(complete_todos, data["tasks"])
+        done, remaining = [], []
+        for i, task in enumerate(data["tasks"], 1):
+            if i in indices:
+                days = days_pending(task["created_at"])
+                log["completed"].append({
+                    "id": task["id"], "text": task["text"],
+                    "created_at": task["created_at"], "completed_at": now,
+                    "days_to_complete": days, "type": "todo"
+                })
+                done.append((task, days))
+            else:
+                remaining.append(task)
+        data["tasks"] = remaining
+        save_todos(data)
+        save_log(log)
+        if done:
+            print(f"\n✅  Completed {len(done)} task(s):")
+            for task, days in done:
+                duration = "same day" if days == 0 else f"{days} day{'s' if days != 1 else ''}"
+                print(f"   ✓  {task['text']}  ({duration})")
+        print()
+        remindme = True
+
     tasks = load_todos()["tasks"]
     reminders = load_reminders()["reminders"]
 
@@ -300,8 +317,6 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
     else:
         print("\n━━━  📋  TODOS  ━━━\n")
         print("  No pending todos.")
-        if morning:
-            print("  (No todos to prioritize — skipping inference.)")
 
     # ── Reminders (display only) ───────────────────────────────────────────────
     if reminders:
@@ -316,23 +331,6 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
     if remindme:
         print()
         return
-
-    # ── Priority recommendation ────────────────────────────────────────────────
-    if tasks:
-        current_ids = [t["id"] for t in tasks]
-        cache = load_priority_cache()
-        cached_ids = cache.get("todo_ids", []) if cache else []
-        has_new_todos = any(tid not in cached_ids for tid in current_ids)
-
-        needs_inference = morning or force_refresh or cache is None or has_new_todos
-
-        print("\n🎯  Priority Recommendation\n")
-        if needs_inference:
-            rec = await get_priority_recommendation(tasks)
-            save_priority_cache(rec, current_ids)
-        else:
-            rec = cache["recommendation"]
-        print(f"   {rec}")
 
     # ── Complete todos ─────────────────────────────────────────────────────────
     if tasks:
@@ -508,13 +506,12 @@ HELP_TEXT = """\
 Usage: todo_manager.py todos [OPTIONS]
 
 Options:
-  --morning         Show AI priority recommendation
-  --remindme        Non-interactive reminder summary (used at login)
-  --add-todo [TEXT] Add a todo (prompts if TEXT omitted)
-  --add-reminder [TEXT]
-                    Add a reminder (prompts if TEXT omitted)
-  --messages        Force-refresh AI priority cache
-  --help            Show this message and exit
+  --remindme              Non-interactive reminder summary (used at login)
+  --add-todo [TEXT]       Add a todo (prompts if TEXT omitted)
+  --add-reminder [TEXT]   Add a reminder (prompts if TEXT omitted)
+  --complete-todo [SPEC]  Complete a todo: "text", #N, or bare number.
+                          Omit SPEC to enter numbers interactively.
+  --help                  Show this message and exit
 """
 
 async def main():
@@ -524,8 +521,6 @@ async def main():
         print(HELP_TEXT, end="")
         sys.exit(0)
 
-    morning = "--morning" in args
-    force_refresh = "--messages" in args
     remindme = "--remindme" in args
     positional = [a for a in args if not a.startswith("--")]
 
@@ -537,14 +532,14 @@ async def main():
     if "--add-todo" in args:
         idx = args.index("--add-todo")
         if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
-            add_todos = [args[idx + 1]]
+            raw = args[idx + 1]
         else:
             raw = multiline_input("Enter todos — press Enter twice when done:\n")
-            if raw:
-                print("\nProcessing...", flush=True)
-                add_todos = await summarize_input(raw)
-            else:
-                add_todos = []
+        if raw:
+            print("\nProcessing...", flush=True)
+            add_todos = await summarize_input(raw)
+        else:
+            add_todos = []
 
     add_reminders = None
     if "--add-reminder" in args:
@@ -566,7 +561,23 @@ async def main():
         else:
             add_reminders = []
 
-    await cmd_todos(morning=morning, force_refresh=force_refresh, remindme=remindme, add_todos=add_todos, add_reminders=add_reminders)
+    complete_todos = None
+    if "--complete-todo" in args:
+        idx = args.index("--complete-todo")
+        if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+            complete_todos = [args[idx + 1]]
+        else:
+            tasks = load_todos()["tasks"]
+            if tasks:
+                print()
+                for i, t in enumerate(tasks, 1):
+                    dot = todo_dot(days_pending(t["created_at"]))
+                    print(f"  {dot}  [{i}]  {t['text']}")
+                print()
+            raw = multiline_input("Enter todo numbers to complete — press Enter twice when done:\n")
+            complete_todos = raw.split() if raw else []
+
+    await cmd_todos(remindme=remindme, add_todos=add_todos, add_reminders=add_reminders, complete_todos=complete_todos)
 
 if __name__ == "__main__":
     try:
