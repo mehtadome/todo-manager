@@ -504,8 +504,26 @@ async def cmd_todos(morning: bool = False, force_refresh: bool = False, remindme
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
+HELP_TEXT = """\
+Usage: todo_manager.py todos [OPTIONS]
+
+Options:
+  --morning         Show AI priority recommendation
+  --remindme        Non-interactive reminder summary (used at login)
+  --add-todo [TEXT] Add a todo (prompts if TEXT omitted)
+  --add-reminder [TEXT]
+                    Add a reminder (prompts if TEXT omitted)
+  --messages        Force-refresh AI priority cache
+  --help            Show this message and exit
+"""
+
 async def main():
     args = sys.argv[1:]
+
+    if "--help" in args or "-h" in args:
+        print(HELP_TEXT, end="")
+        sys.exit(0)
+
     morning = "--morning" in args
     force_refresh = "--messages" in args
     remindme = "--remindme" in args
