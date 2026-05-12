@@ -1,10 +1,10 @@
 # Todo Manager
 
-An AI-powered local task manager for macOS. Describe what you need to do in plain English — Claude turns it into clean, numbered tasks and recommends what to tackle first based on urgency and how long things have been sitting. A Terminal window opens automatically every time you log in.
+An AI-powered local task manager for macOS. Describe what you need to do in plain English — Claude turns it into clean, numbered tasks. A Terminal window opens automatically every time you log in.
 
 > **No API key needed.** This runs through your Claude Pro or Claude Code subscription.
 
-> **v1.1 is out.** Color-dot priority system — see the [changelog](https://github.com/mehtadome/todo-manager/pull/5).
+> **v1.2 is out.** `--complete-todo`, improved todo summarization, inference recommendation removed — see the [changelog](https://github.com/mehtadome/todo-manager/pull/6).
 
 ---
 
@@ -80,37 +80,38 @@ Make sure **Terminal** is allowed to be controlled by scripts.
 
 ## How it works
 
-Every time you log in, a Terminal window opens automatically running `todos --morning`. You can also trigger it manually at any time:
+Every time you log in, a Terminal window opens automatically running `todos --remindme`. You can also trigger it manually at any time:
 
 ```bash
 .venv/bin/python3 todo_manager.py todos
 ```
 
 The session shows:
-- All pending todos with age indicators
+- All pending todos with color-dot age indicators
 - Any active reminders with due-date urgency (display only)
-- Claude's priority recommendation (see caching behavior below)
-- A prompt to mark todos done by number
-- A free-text prompt to add new todos
+- A prompt to mark todos and reminders done by number
+- A free-text prompt to rant — Claude distills it into clean action items
 
 Numbers displayed next to todos reset to `[1]` each session — always use what you see on screen.
 
-Age indicators:
-- `📌` — pending 3+ days
-- `⚠️ overdue!` — pending 7+ days
+Todo age dots:
+- `⚪` — added today or yesterday
+- `🟢` — 3–6 days old
+- `🟡` — 7–13 days old
+- `🔴` — 14+ days (very stale)
 
-### Priority recommendation caching
+### Non-interactive flags
 
-Claude is only called for a priority recommendation in specific circumstances. The result is written to `priority_cache.json` and reused across invocations — effectively a file-backed in-memory cache that persists between runs.
+All flags exit after their action and print the current list — useful for shell aliases or scripting.
 
-| Invocation | Behavior |
+| Flag | Behavior |
 |---|---|
-| Login (automatic, `--morning`) | Always infers if todos exist; clean skip message if none |
-| `todos` (manual) | Reuses cached recommendation |
-| `todos --messages` | Forces re-inference regardless of cache |
-| `todos` after new todos added | Detects new todo IDs not present in the cache — re-infers automatically |
-
-This means Claude is called at most once per login session under normal use, and never wastefully on repeated manual runs.
+| `--remindme` | Display-only summary, no prompts (used by login LaunchAgent) |
+| `--add-todo "text"` | Add a todo; Claude always restates it concisely before saving |
+| `--add-reminder "text"` | Parse natural-language reminder with due date |
+| `--complete-todo "text"` | Complete by case-insensitive text match |
+| `--complete-todo #N` or `N` | Complete by list position |
+| `--complete-todo` | Show list, then multiline number entry (Enter×2 to submit) |
 
 ---
 
@@ -126,6 +127,5 @@ This means Claude is called at most once per login session under normal use, and
 | `assets/todos.json` | Live task list (created by setup) |
 | `assets/reminders.json` | Active reminders (created by setup) |
 | `assets/completed_log.json` | Completion history (created by setup) |
-| `assets/priority_cache.json` | Cached priority recommendation with the todo IDs it was based on |
 | `assets/todo_cron.log` | Cron output log |
 | `assets/.last_reminded` | Tracks the last date the login reminder fired (created by setup) |

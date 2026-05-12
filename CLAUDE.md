@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Versioning
 
-Each merged PR increments the minor version. Current version: **v1.0** (PR #4).
+Each merged PR increments the minor version. Current version: **v1.2** (PR #6).
 
 | Version | PR |
 |---|---|
 | v1.0 | [#4 — reminders overhaul, quick-add flags, side effect docs](https://github.com/mehtadome/todo-manager/pull/4) |
 | v1.1 | [#5 — color-dot priority system](https://github.com/mehtadome/todo-manager/pull/5) |
+| v1.2 | [#6 — remove inference recommendation, always restate todos via Claude, add --complete-todo](https://github.com/mehtadome/todo-manager/pull/6) |
 
 When creating a new PR, add a row to this table with the next version (v1.1, v1.2, …). When the version reaches **v1.9**, flag it to the user before proceeding — that's the signal to discuss whether to cut a v2.0.
 
@@ -18,9 +19,10 @@ When creating a new PR, add a row to this table with the next version (v1.1, v1.
 All commands use the venv Python, run from the repo root:
 
 ```bash
-.venv/bin/python3 todo_manager.py todos           # all-in-one interactive dashboard
-.venv/bin/python3 todo_manager.py todos --morning # morning mode: shows AI priority recommendation
-.venv/bin/python3 todo_manager.py todos --remindme # non-interactive reminder summary (used at login)
+.venv/bin/python3 todo_manager.py todos                        # all-in-one interactive dashboard
+.venv/bin/python3 todo_manager.py todos --remindme             # non-interactive reminder summary (used at login)
+.venv/bin/python3 todo_manager.py todos --add-todo "text"      # add a single todo via Claude restatement
+.venv/bin/python3 todo_manager.py todos --complete-todo "text" # complete by text match, #N, or omit for interactive
 ```
 
 ## Setup
@@ -35,9 +37,9 @@ The LaunchAgent (`~/Library/LaunchAgents/com.<user>.todo-manager.plist`) calls `
 
 **Single-file CLI** — everything lives in `todo_manager.py`:
 
-- **Data layer**: `assets/todos.json`, `assets/reminders.json`, `assets/completed_log.json`, `assets/priority_cache.json` — plain JSON files stored in the `assets/` subdirectory. `load_*/save_*` helpers read/write them directly with no ORM.
-- **AI layer**: `ask_claude()` calls `claude_agent_sdk.query()` (uses Claude Code subscription, no API key). Three AI functions: `summarize_input` (NL → task list), `parse_reminders` (NL → list of `{text, due_date}`), `get_priority_recommendation` (todos → one-sentence priority pick). All return structured output parsed from Claude's response via `re.search`.
-- **Commands**: single entry point — `todos` — which runs an interactive session: displays current todos and reminders, offers to mark items done, then prompts for new todos and reminders. Optional flags: `--morning` (show AI priority recommendation), `--remindme` (non-interactive, used by the login LaunchAgent).
+- **Data layer**: `assets/todos.json`, `assets/reminders.json`, `assets/completed_log.json` — plain JSON files stored in the `assets/` subdirectory. `load_*/save_*` helpers read/write them directly with no ORM.
+- **AI layer**: `ask_claude()` calls `claude_agent_sdk.query()` (uses Claude Code subscription, no API key). Two AI functions: `summarize_input` (NL → task list, always called for any todo input), `parse_reminders` (NL → list of `{text, due_date}`). Both return structured output parsed from Claude's response via `re.search`.
+- **Commands**: single entry point — `todos` — which runs an interactive session: displays current todos and reminders, offers to mark items done, then prompts for new todos and reminders. Optional flags: `--remindme` (non-interactive, used by the login LaunchAgent), `--add-todo` (non-interactive add), `--add-reminder` (non-interactive add), `--complete-todo` (non-interactive completion by text, number, or interactive list).
 - **Shell scripts**: `scripts/todo_remind.sh` (login, non-interactive) and `scripts/todo_checkin.sh` (evening, interactive) use AppleScript to open a Terminal window and run the appropriate command inside it.
 
 **No tests, no linter config** — the project has no test suite or formatting toolchain.
